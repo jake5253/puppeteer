@@ -886,7 +886,24 @@ export class ElementHandle<
    * or `null` if the element is not visible.
    */
   async boundingBox(): Promise<BoundingBox | null> {
-    throw new Error('Not implemented');
+    if (this.frame.parentFrame()) {
+      throw new Error(
+        'Elements within nested iframes are currently not supported.'
+      );
+    }
+    const box = await this.evaluate(element => {
+      if ('offsetParent' in element && element.offsetParent === null) {
+        return null;
+      }
+      const rect = (element as unknown as Element).getBoundingClientRect();
+      return {
+        x: rect.left,
+        y: rect.top,
+        width: rect.width,
+        height: rect.height,
+      };
+    });
+    return box;
   }
 
   /**

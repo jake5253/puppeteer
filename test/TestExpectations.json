@@ -546,6 +546,30 @@
     "expectations": ["PASS"]
   },
   {
+    "testIdPattern": "[elementhandle.spec] ElementHandle specs ElementHandle.boundingBox should force a layout",
+    "platforms": ["darwin", "linux", "win32"],
+    "parameters": ["webDriverBiDi"],
+    "expectations": ["PASS"]
+  },
+  {
+    "testIdPattern": "[elementhandle.spec] ElementHandle specs ElementHandle.boundingBox should return null for invisible elements",
+    "platforms": ["darwin", "linux", "win32"],
+    "parameters": ["webDriverBiDi"],
+    "expectations": ["PASS"]
+  },
+  {
+    "testIdPattern": "[elementhandle.spec] ElementHandle specs ElementHandle.boundingBox should work",
+    "platforms": ["darwin", "linux", "win32"],
+    "parameters": ["webDriverBiDi"],
+    "expectations": ["PASS"]
+  },
+  {
+    "testIdPattern": "[elementhandle.spec] ElementHandle specs ElementHandle.boundingBox should work with SVG nodes",
+    "platforms": ["darwin", "linux", "win32"],
+    "parameters": ["webDriverBiDi"],
+    "expectations": ["PASS"]
+  },
+  {
     "testIdPattern": "[elementhandle.spec] ElementHandle specs ElementHandle.click should not work for TextNodes",
     "platforms": ["darwin", "linux", "win32"],
     "parameters": ["webDriverBiDi"],
@@ -3814,6 +3838,12 @@
     "platforms": ["darwin", "linux", "win32"],
     "parameters": ["firefox", "headful", "webDriverBiDi"],
     "expectations": ["FAIL"]
+  },
+  {
+    "testIdPattern": "[mouse.spec] Mouse should resize the textarea",
+    "platforms": ["darwin"],
+    "parameters": ["chrome", "headless", "webDriverBiDi"],
+    "expectations": ["PASS"]
   },
   {
     "testIdPattern": "[navigation.spec] navigation \"after all\" hook in \"navigation\"",
