@@ -108,6 +108,7 @@
     "@microsoft/api-documenter": "7.22.33",
     "@microsoft/api-extractor": "7.36.4",
     "@microsoft/api-extractor-model": "7.27.6",
+    "@puppeteer/ts-plugin": "file:packages/ts-puppeteer-plugin",
     "@pptr/testserver": "file:packages/testserver",
     "@prettier/sync": "0.3.0",
     "@rollup/plugin-node-resolve": "15.2.1",

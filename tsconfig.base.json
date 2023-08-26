@@ -28,6 +28,9 @@
     "strictPropertyInitialization": true,
     "target": "ES2022",
     "useUnknownInCatchVariables": true,
-    "skipLibCheck": true
-  }
+    "skipLibCheck": true,
+    "plugins": [{
+      "name": "@puppeteer/ts-plugin"
+    }]
+  }  
 }

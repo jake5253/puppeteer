@@ -1,0 +1,43 @@
+{
+  "name": "@puppeteer/ts-plugin",
+  "version": "0.1.0",
+  "description": "A high-level API to control headless Chrome over the DevTools Protocol",
+  "keywords": [],
+  "type": "commonjs",
+  "main": "./lib/ts-puppeteer-plugin.js",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/puppeteer/puppeteer/tree/main/packages/ts-puppeteer-plugin"
+  },
+  "scripts": {
+    "build": "wireit",
+    "prepare": "npm run build"
+  },
+  "wireit": {
+    "build": {
+      "dependencies": [
+        "build:tsc"
+      ]
+    },
+    "build:tsc": {
+      "command": "tsc -b",
+      "clean": "if-file-deleted",
+      "files": [
+        "src/**",
+        "tsconfig.tsbuildinfo"
+      ],
+      "output": [
+        "lib/**"
+      ]
+    }
+  },
+  "files": [
+    "lib",
+    "ts-puppeteer-plugin.js"
+  ],
+  "author": "The Chromium Authors",
+  "license": "Apache-2.0",
+  "peerDependencies": {
+    "typescript": "~5.2.2"
+  }
+}
