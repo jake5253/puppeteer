@@ -337,15 +337,13 @@ export abstract class ElementHandle<
     ...args: Params
   ): Promise<Awaited<ReturnType<Func>>> {
     pageFunction = withSourcePuppeteerURLIfNone(this.$eval.name, pageFunction);
-    const elementHandle = await this.$(selector);
+    using elementHandle = await this.$(selector);
     if (!elementHandle) {
       throw new Error(
         `Error: failed to find element matching selector "${selector}"`
       );
     }
-    const result = await elementHandle.evaluate(pageFunction, ...args);
-    await elementHandle.dispose();
-    return result;
+    return await elementHandle.evaluate(pageFunction, ...args);
   }
 
   /**
@@ -395,7 +393,7 @@ export abstract class ElementHandle<
   ): Promise<Awaited<ReturnType<Func>>> {
     pageFunction = withSourcePuppeteerURLIfNone(this.$$eval.name, pageFunction);
     const results = await this.$$(selector);
-    const elements = await this.evaluateHandle(
+    using elements = await this.evaluateHandle(
       (_, ...elements) => {
         return elements;
       },
@@ -407,7 +405,6 @@ export abstract class ElementHandle<
         return results.dispose();
       }),
     ]);
-    await elements.dispose();
     return result;
   }
 
@@ -481,21 +478,17 @@ export abstract class ElementHandle<
   }
 
   async #checkVisibility(visibility: boolean): Promise<boolean> {
-    const element = await this.frame.isolatedRealm().adoptHandle(this);
-    try {
-      return await this.frame.isolatedRealm().evaluate(
-        async (PuppeteerUtil, element, visibility) => {
-          return Boolean(PuppeteerUtil.checkVisibility(element, visibility));
-        },
-        LazyArg.create(context => {
-          return context.puppeteerUtil;
-        }),
-        element,
-        visibility
-      );
-    } finally {
-      await element.dispose();
-    }
+    using element = await this.frame.isolatedRealm().adoptHandle(this);
+    return await this.frame.isolatedRealm().evaluate(
+      async (PuppeteerUtil, element, visibility) => {
+        return Boolean(PuppeteerUtil.checkVisibility(element, visibility));
+      },
+      LazyArg.create(context => {
+        return context.puppeteerUtil;
+      }),
+      element,
+      visibility
+    );
   }
 
   /**
@@ -904,7 +897,7 @@ export abstract class ElementHandle<
   }
 
   async #clickableBox(): Promise<BoundingBox | null> {
-    const adoptedThis = await this.frame.isolatedRealm().adoptHandle(this);
+    using adoptedThis = await this.frame.isolatedRealm().adoptHandle(this);
     const boxes = await adoptedThis.evaluate(element => {
       if (!(element instanceof Element)) {
         return null;
@@ -913,7 +906,6 @@ export abstract class ElementHandle<
         return {x: rect.x, y: rect.y, width: rect.width, height: rect.height};
       });
     });
-    void adoptedThis.dispose().catch(debugError);
     if (!boxes?.length) {
       return null;
     }
@@ -921,38 +913,34 @@ export abstract class ElementHandle<
     let frame: Frame | null | undefined = this.frame;
     let element: HandleFor<HTMLIFrameElement> | null | undefined;
     while ((element = await frame?.frameElement())) {
-      try {
-        element = await element.frame.isolatedRealm().transferHandle(element);
-        const parentBox = await element.evaluate(element => {
-          // Element is not visible.
-          if (element.getClientRects().length === 0) {
-            return null;
-          }
-          const rect = element.getBoundingClientRect();
-          const style = window.getComputedStyle(element);
-          return {
-            left:
-              rect.left +
-              parseInt(style.paddingLeft, 10) +
-              parseInt(style.borderLeftWidth, 10),
-            top:
-              rect.top +
-              parseInt(style.paddingTop, 10) +
-              parseInt(style.borderTopWidth, 10),
-          };
-        });
-        if (!parentBox) {
+      using adoptedElement = await element.frame.isolatedRealm().transferHandle(element);
+      const parentBox = await adoptedElement.evaluate(element => {
+        // Element is not visible.
+        if (element.getClientRects().length === 0) {
           return null;
         }
-        for (const box of boxes) {
-          box.x += parentBox.left;
-          box.y += parentBox.top;
-        }
-        await element.#intersectBoundingBoxesWithFrame(boxes);
-        frame = frame?.parentFrame();
-      } finally {
-        void element.dispose().catch(debugError);
+        const rect = element.getBoundingClientRect();
+        const style = window.getComputedStyle(element);
+        return {
+          left:
+            rect.left +
+            parseInt(style.paddingLeft, 10) +
+            parseInt(style.borderLeftWidth, 10),
+          top:
+            rect.top +
+            parseInt(style.paddingTop, 10) +
+            parseInt(style.borderTopWidth, 10),
+        };
+      });
+      if (!parentBox) {
+        return null;
       }
+      for (const box of boxes) {
+        box.x += parentBox.left;
+        box.y += parentBox.top;
+      }
+      await adoptedElement.#intersectBoundingBoxesWithFrame(boxes);
+      frame = frame?.parentFrame();
     }
     const box = boxes.find(box => {
       return box.width >= 1 && box.height >= 1;
@@ -987,7 +975,7 @@ export abstract class ElementHandle<
    * or `null` if the element is not visible.
    */
   async boundingBox(): Promise<BoundingBox | null> {
-    const adoptedThis = await this.frame.isolatedRealm().adoptHandle(this);
+    using adoptedThis = await this.frame.isolatedRealm().adoptHandle(this);
     const box = await adoptedThis.evaluate(element => {
       if (!(element instanceof Element)) {
         return null;
@@ -999,7 +987,6 @@ export abstract class ElementHandle<
       const rect = element.getBoundingClientRect();
       return {x: rect.x, y: rect.y, width: rect.width, height: rect.height};
     });
-    void adoptedThis.dispose().catch(debugError);
     if (!box) {
       return null;
     }
@@ -1024,7 +1011,7 @@ export abstract class ElementHandle<
    * Each Point is an object `{x, y}`. Box points are sorted clock-wise.
    */
   async boxModel(): Promise<BoxModel | null> {
-    const adoptedThis = await this.frame.isolatedRealm().adoptHandle(this);
+    using adoptedThis = await this.frame.isolatedRealm().adoptHandle(this);
     const model = await adoptedThis.evaluate(element => {
       if (!(element instanceof Element)) {
         return null;
@@ -1097,7 +1084,6 @@ export abstract class ElementHandle<
         ];
       }
     });
-    void adoptedThis.dispose().catch(debugError);
     if (!model) {
       return null;
     }
@@ -1124,35 +1110,31 @@ export abstract class ElementHandle<
     let frame: Frame | null | undefined = this.frame;
     let element: HandleFor<HTMLIFrameElement> | null | undefined;
     while ((element = await frame?.frameElement())) {
-      try {
-        element = await element.frame.isolatedRealm().transferHandle(element);
-        const parentBox = await element.evaluate(element => {
-          // Element is not visible.
-          if (element.getClientRects().length === 0) {
-            return null;
-          }
-          const rect = element.getBoundingClientRect();
-          const style = window.getComputedStyle(element);
-          return {
-            left:
-              rect.left +
-              parseInt(style.paddingLeft, 10) +
-              parseInt(style.borderLeftWidth, 10),
-            top:
-              rect.top +
-              parseInt(style.paddingTop, 10) +
-              parseInt(style.borderTopWidth, 10),
-          };
-        });
-        if (!parentBox) {
+      using adoptedElement = await element.frame.isolatedRealm().transferHandle(element);
+      const parentBox = await adoptedElement.evaluate(element => {
+        // Element is not visible.
+        if (element.getClientRects().length === 0) {
           return null;
         }
-        point.x += parentBox.left;
-        point.y += parentBox.top;
-        frame = frame?.parentFrame();
-      } finally {
-        void element.dispose().catch(debugError);
+        const rect = element.getBoundingClientRect();
+        const style = window.getComputedStyle(element);
+        return {
+          left:
+            rect.left +
+            parseInt(style.paddingLeft, 10) +
+            parseInt(style.borderLeftWidth, 10),
+          top:
+            rect.top +
+            parseInt(style.paddingTop, 10) +
+            parseInt(style.borderTopWidth, 10),
+        };
+      });
+      if (!parentBox) {
+        return null;
       }
+      point.x += parentBox.left;
+      point.y += parentBox.top;
+      frame = frame?.parentFrame();
     }
     return point;
   }
@@ -1217,34 +1199,22 @@ export abstract class ElementHandle<
    */
   async isIntersectingViewport(
     this: ElementHandle<Element>,
-    options?: {
-      threshold?: number;
-    }
+    options: {threshold?: number;} = {}
   ): Promise<boolean> {
     await this.assertConnectedElement();
 
-    const {threshold = 0} = options ?? {};
-    const svgHandle = await this.#asSVGElementHandle(this);
-    const intersectionTarget: ElementHandle<Element> = svgHandle
-      ? await this.#getOwnerSVGElement(svgHandle)
-      : this;
-
-    try {
-      return await intersectionTarget.evaluate(async (element, threshold) => {
-        const visibleRatio = await new Promise<number>(resolve => {
-          const observer = new IntersectionObserver(entries => {
-            resolve(entries[0]!.intersectionRatio);
-            observer.disconnect();
-          });
-          observer.observe(element);
+    const svgElement = await this.#toSVGElement();
+    using ownerSVGElement = svgElement && await svgElement.#getOwnerSVGElement();
+    return await ((ownerSVGElement ?? svgElement ?? this) as ElementHandle<Element>).evaluate(async (element, threshold) => {
+      const visibleRatio = await new Promise<number>(resolve => {
+        const observer = new IntersectionObserver(entries => {
+          resolve(entries[0]!.intersectionRatio);
+          observer.disconnect();
         });
-        return threshold === 1 ? visibleRatio === 1 : visibleRatio > threshold;
-      }, threshold);
-    } finally {
-      if (intersectionTarget !== this) {
-        await intersectionTarget.dispose();
-      }
-    }
+        observer.observe(element);
+      });
+      return threshold === 1 ? visibleRatio === 1 : visibleRatio > threshold;
+    }, options.threshold ?? 0);
   }
 
   /**
@@ -1266,25 +1236,23 @@ export abstract class ElementHandle<
    * Returns true if an element is an SVGElement (included svg, path, rect
    * etc.).
    */
-  async #asSVGElementHandle(
-    handle: ElementHandle<Element>
-  ): Promise<ElementHandle<SVGElement> | null> {
+  async #toSVGElement(): Promise<ElementHandle<SVGElement> | null> {
     if (
-      await handle.evaluate(element => {
+      await this.evaluate(element => {
         return element instanceof SVGElement;
       })
     ) {
-      return handle as ElementHandle<SVGElement>;
-    } else {
-      return null;
+      // SAFETY: This is guaranteed at this point.
+      return this as unknown as ElementHandle<SVGElement>;
     }
+    return null;
   }
 
   async #getOwnerSVGElement(
-    handle: ElementHandle<SVGElement>
+    this: ElementHandle<SVGElement>,
   ): Promise<ElementHandle<SVGSVGElement>> {
     // SVGSVGElement.ownerSVGElement === null.
-    return await handle.evaluateHandle(element => {
+    return await this.evaluateHandle(element => {
       if (element instanceof SVGSVGElement) {
         return element;
       }
@@ -1323,6 +1291,13 @@ export abstract class ElementHandle<
    * ```
    */
   abstract autofill(data: AutofillData): Promise<void>;
+
+  /**
+   * Disposes the handle.
+   */
+  override [Symbol.dispose](): void {
+    void this.dispose().catch(debugError);
+  }
 }
 
 /**

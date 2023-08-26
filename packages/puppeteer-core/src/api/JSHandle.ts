@@ -16,7 +16,9 @@
 
 import Protocol from 'devtools-protocol';
 
+import {debugError} from '../common/bidi/utils.js';
 import {EvaluateFuncWith, HandleFor, HandleOr} from '../common/types.js';
+import Symbol from '../util/symbol.js';
 
 import {ElementHandle} from './ElementHandle.js';
 
@@ -150,4 +152,11 @@ export abstract class JSHandle<T = unknown> {
    * backing this handle.
    */
   abstract remoteObject(): Protocol.Runtime.RemoteObject;
+
+  /**
+   * Disposes the handle.
+   */
+  [Symbol.dispose](): void {
+    void this.dispose().catch(debugError);
+  }
 }
