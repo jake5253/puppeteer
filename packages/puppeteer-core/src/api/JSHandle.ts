@@ -18,7 +18,7 @@ import Protocol from 'devtools-protocol';
 
 import {debugError} from '../common/bidi/utils.js';
 import {EvaluateFuncWith, HandleFor, HandleOr} from '../common/types.js';
-import Symbol from '../util/symbol.js';
+import {Symbol} from '../util/disposable.js';
 
 import {ElementHandle} from './ElementHandle.js';
 
@@ -132,6 +132,15 @@ export abstract class JSHandle<T = unknown> {
    * Releases the object referenced by the handle for garbage collection.
    */
   abstract dispose(): Promise<void>;
+
+  /**
+   * Clones the current handle.
+   */
+  clone(): Promise<HandleFor<T>> {
+    return this.evaluateHandle(value => {
+      return value;
+    });
+  }
 
   /**
    * Returns a string representation of the JSHandle.

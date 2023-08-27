@@ -254,6 +254,13 @@ export abstract class ElementHandle<
     return await this.handle.dispose();
   }
 
+  /**
+   * @internal
+   */
+  override clone(): Promise<HandleFor<ElementType>> {
+    return this.handle.clone();
+  }
+
   override asElement(): ElementHandle<ElementType> {
     return this;
   }
@@ -911,9 +918,15 @@ export abstract class ElementHandle<
     }
     await this.#intersectBoundingBoxesWithFrame(boxes);
     let frame: Frame | null | undefined = this.frame;
-    let element: HandleFor<HTMLIFrameElement> | null | undefined;
-    while ((element = await frame?.frameElement())) {
-      using adoptedElement = await element.frame.isolatedRealm().transferHandle(element);
+    let parentFrame: Frame | null | undefined;
+    while (parentFrame = frame?.parentFrame()) {
+      using adoptedElement = await (async () => {
+        using element = await frame.frameElement();
+        if (!element) {
+          throw new Error('Unsupported frame type');
+        }
+        return await element.frame.isolatedRealm().adoptHandle(element);
+      })();
       const parentBox = await adoptedElement.evaluate(element => {
         // Element is not visible.
         if (element.getClientRects().length === 0) {
@@ -940,7 +953,7 @@ export abstract class ElementHandle<
         box.y += parentBox.top;
       }
       await adoptedElement.#intersectBoundingBoxesWithFrame(boxes);
-      frame = frame?.parentFrame();
+      frame = parentFrame;
     }
     const box = boxes.find(box => {
       return box.width >= 1 && box.height >= 1;
@@ -1108,9 +1121,15 @@ export abstract class ElementHandle<
   async #getTopLeftCornerOfFrame() {
     const point = {x: 0, y: 0};
     let frame: Frame | null | undefined = this.frame;
-    let element: HandleFor<HTMLIFrameElement> | null | undefined;
-    while ((element = await frame?.frameElement())) {
-      using adoptedElement = await element.frame.isolatedRealm().transferHandle(element);
+    let parentFrame: Frame | null | undefined;
+    while (parentFrame = frame?.parentFrame()) {
+      using adoptedElement = await (async () => {
+        using element = await frame.frameElement();
+        if (!element) {
+          throw new Error('Unsupported frame type');
+        }
+        return await element.frame.isolatedRealm().adoptHandle(element);
+      })();
       const parentBox = await adoptedElement.evaluate(element => {
         // Element is not visible.
         if (element.getClientRects().length === 0) {
@@ -1134,7 +1153,7 @@ export abstract class ElementHandle<
       }
       point.x += parentBox.left;
       point.y += parentBox.top;
-      frame = frame?.parentFrame();
+      frame = parentFrame;
     }
     return point;
   }
