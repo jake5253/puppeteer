@@ -1207,20 +1207,19 @@ export abstract class ElementHandle<
     await this.assertConnectedElement();
     // eslint-disable-next-line rulesdir/use-using -- Returns `this`.
     const handle = await this.#asSVGElementHandle();
-    using target = handle && (await handle.#getOwnerSVGElement());
-    return await ((target ?? this) as ElementHandle<Element>).evaluate(
-      async (element, threshold) => {
-        const visibleRatio = await new Promise<number>(resolve => {
-          const observer = new IntersectionObserver(entries => {
-            resolve(entries[0]!.intersectionRatio);
-            observer.disconnect();
-          });
-          observer.observe(element);
+    using target = handle
+      ? ((await handle.#getOwnerSVGElement()) as ElementHandle<Element>)
+      : this.ref();
+    return await target.evaluate(async (element, threshold) => {
+      const visibleRatio = await new Promise<number>(resolve => {
+        const observer = new IntersectionObserver(entries => {
+          resolve(entries[0]!.intersectionRatio);
+          observer.disconnect();
         });
-        return threshold === 1 ? visibleRatio === 1 : visibleRatio > threshold;
-      },
-      options.threshold ?? 0
-    );
+        observer.observe(element);
+      });
+      return threshold === 1 ? visibleRatio === 1 : visibleRatio > threshold;
+    }, options.threshold ?? 0);
   }
 
   /**

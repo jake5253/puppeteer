@@ -15,10 +15,9 @@
  */
 
 import {Symbol} from '../../third_party/disposablestack/disposablestack.js';
-import {Moveable} from '../common/types.js';
+import {Moveable, ReferenceCounted} from '../common/types.js';
 
-const instances = new WeakSet<object>();
-
+const moveableInstances = new WeakSet<Moveable>();
 export function moveable<
   Class extends abstract new (...args: never[]) => Moveable,
 >(Class: Class, _: ClassDecoratorContext<Class>): Class {
@@ -26,8 +25,8 @@ export function moveable<
   if (Class.prototype[Symbol.dispose]) {
     const dispose = Class.prototype[Symbol.dispose];
     Class.prototype[Symbol.dispose] = function (this: InstanceType<Class>) {
-      if (instances.has(this)) {
-        instances.delete(this);
+      if (moveableInstances.has(this)) {
+        moveableInstances.delete(this);
         return;
       }
       return dispose.call(this);
@@ -39,8 +38,8 @@ export function moveable<
     Class.prototype[Symbol.asyncDispose] = function (
       this: InstanceType<Class>
     ) {
-      if (instances.has(this)) {
-        instances.delete(this);
+      if (moveableInstances.has(this)) {
+        moveableInstances.delete(this);
         return;
       }
       return asyncDispose.call(this);
@@ -51,7 +50,52 @@ export function moveable<
     Class.prototype.move = function (
       this: InstanceType<Class>
     ): InstanceType<Class> {
-      instances.add(this);
+      moveableInstances.add(this);
+      return this;
+    };
+  }
+  return Class;
+}
+
+const referenceCountedInstances = new WeakMap<ReferenceCounted, number>();
+export function referenceCounted<
+  Class extends abstract new (...args: never[]) => ReferenceCounted,
+>(Class: Class, _: ClassDecoratorContext<Class>): Class {
+  let hasDispose = false;
+  if (Class.prototype[Symbol.dispose]) {
+    const dispose = Class.prototype[Symbol.dispose];
+    Class.prototype[Symbol.dispose] = function (this: InstanceType<Class>) {
+      const count = referenceCountedInstances.get(this) ?? 0;
+      if (count > 0) {
+        referenceCountedInstances.set(this, count - 1);
+        return;
+      }
+      return dispose.call(this);
+    };
+    hasDispose = true;
+  }
+  if (Class.prototype[Symbol.asyncDispose]) {
+    const asyncDispose = Class.prototype[Symbol.asyncDispose];
+    Class.prototype[Symbol.asyncDispose] = function (
+      this: InstanceType<Class>
+    ) {
+      const count = referenceCountedInstances.get(this) ?? 0;
+      if (count > 0) {
+        referenceCountedInstances.set(this, count - 1);
+        return;
+      }
+      return asyncDispose.call(this);
+    };
+    hasDispose = true;
+  }
+  if (hasDispose) {
+    Class.prototype.ref = function (
+      this: InstanceType<Class>
+    ): InstanceType<Class> {
+      referenceCountedInstances.set(
+        this,
+        (referenceCountedInstances.get(this) ?? 0) + 1
+      );
       return this;
     };
   }

@@ -32,6 +32,16 @@ export interface Moveable {
 /**
  * @internal
  */
+export interface ReferenceCounted {
+  /**
+   * Increases the count of a reference counted resource.
+   */
+  ref(): this;
+}
+
+/**
+ * @internal
+ */
 export interface BindingPayload {
   type: string;
   name: string;

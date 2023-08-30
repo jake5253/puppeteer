@@ -22,9 +22,10 @@ import {
   HandleFor,
   HandleOr,
   Moveable,
+  ReferenceCounted,
 } from '../common/types.js';
 import {debugError} from '../common/util.js';
-import {moveable} from '../util/decorators.js';
+import {moveable, referenceCounted} from '../util/decorators.js';
 
 import {ElementHandle} from './ElementHandle.js';
 
@@ -49,11 +50,17 @@ import {ElementHandle} from './ElementHandle.js';
  *
  * @public
  */
+@referenceCounted
 @moveable
 export abstract class JSHandle<T = unknown>
-  implements Disposable, AsyncDisposable, Moveable
+  implements Disposable, AsyncDisposable, Moveable, ReferenceCounted
 {
   declare move: () => this;
+
+  /**
+   * @internal
+   */
+  declare ref: () => this;
 
   /**
    * Used for nominally typing {@link JSHandle}.

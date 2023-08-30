@@ -13,10 +13,10 @@ Handles can be used as arguments for any evaluation function such as [Page.$eval
 #### Signature:
 
 ```typescript
-export declare abstract class JSHandle<T = unknown> implements Disposable, AsyncDisposable, Moveable
+export declare abstract class JSHandle<T = unknown> implements Disposable, AsyncDisposable, Moveable, ReferenceCounted
 ```
 
-**Implements:** Disposable, AsyncDisposable, [Moveable](./puppeteer.moveable.md)
+**Implements:** Disposable, AsyncDisposable, [Moveable](./puppeteer.moveable.md), ReferenceCounted
 
 ## Remarks
 
