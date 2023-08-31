@@ -142,7 +142,7 @@ export abstract class ElementHandle<
   /**
    * @internal
    */
-  protected handle;
+  protected readonly handle;
 
   /**
    * @internal
@@ -265,15 +265,15 @@ export abstract class ElementHandle<
    * @returns A {@link ElementHandle | element handle} to the first element
    * matching the given selector. Otherwise, `null`.
    */
-  async $<Selector extends string>(
+  $<Selector extends string>(
     selector: Selector
   ): Promise<ElementHandle<NodeFor<Selector>> | null> {
     const {updatedSelector, QueryHandler} =
       getQueryHandlerAndSelector(selector);
-    return (await QueryHandler.queryOne(
+    return QueryHandler.queryOne(
       this,
       updatedSelector
-    )) as ElementHandle<NodeFor<Selector>> | null;
+    ) as Promise<ElementHandle<NodeFor<Selector>> | null>;
   }
 
   /**
@@ -283,7 +283,7 @@ export abstract class ElementHandle<
    * @returns An array of {@link ElementHandle | element handles} that point to
    * elements matching the given selector.
    */
-  async $$<Selector extends string>(
+  $$<Selector extends string>(
     selector: Selector
   ): Promise<Array<ElementHandle<NodeFor<Selector>>>> {
     const {updatedSelector, QueryHandler} =
@@ -338,7 +338,7 @@ export abstract class ElementHandle<
         `Error: failed to find element matching selector "${selector}"`
       );
     }
-    return await elementHandle.evaluate(pageFunction, ...args);
+    return elementHandle.evaluate(pageFunction, ...args);
   }
 
   /**
@@ -415,7 +415,7 @@ export abstract class ElementHandle<
    * If there are no such elements, the method will resolve to an empty array.
    * @param expression - Expression to {@link https://developer.mozilla.org/en-US/docs/Web/API/Document/evaluate | evaluate}
    */
-  async $x(expression: string): Promise<Array<ElementHandle<Node>>> {
+  $x(expression: string): Promise<Array<ElementHandle<Node>>> {
     if (expression.startsWith('//')) {
       expression = `.${expression}`;
     }
@@ -459,17 +459,17 @@ export abstract class ElementHandle<
    * @returns An element matching the given selector.
    * @throws Throws if an element matching the given selector doesn't appear.
    */
-  async waitForSelector<Selector extends string>(
+  waitForSelector<Selector extends string>(
     selector: Selector,
     options: WaitForSelectorOptions = {}
   ): Promise<ElementHandle<NodeFor<Selector>> | null> {
     const {updatedSelector, QueryHandler} =
       getQueryHandlerAndSelector(selector);
-    return (await QueryHandler.waitFor(
+    return QueryHandler.waitFor(
       this,
       updatedSelector,
       options
-    )) as ElementHandle<NodeFor<Selector>> | null;
+    ) as Promise<ElementHandle<NodeFor<Selector>> | null>;
   }
 
   async #checkVisibility(visibility: boolean): Promise<boolean> {
@@ -490,7 +490,7 @@ export abstract class ElementHandle<
    * Checks if an element is visible using the same mechanism as
    * {@link ElementHandle.waitForSelector}.
    */
-  async isVisible(): Promise<boolean> {
+  isVisible(): Promise<boolean> {
     return this.#checkVisibility(true);
   }
 
@@ -498,7 +498,7 @@ export abstract class ElementHandle<
    * Checks if an element is hidden using the same mechanism as
    * {@link ElementHandle.waitForSelector}.
    */
-  async isHidden(): Promise<boolean> {
+  isHidden(): Promise<boolean> {
     return this.#checkVisibility(false);
   }
 
@@ -564,7 +564,7 @@ export abstract class ElementHandle<
    *   default value can be changed by using the {@link Page.setDefaultTimeout}
    *   method.
    */
-  async waitForXPath(
+  waitForXPath(
     xpath: string,
     options: {
       visible?: boolean;
@@ -1268,11 +1268,6 @@ export abstract class ElementHandle<
       return element.ownerSVGElement!;
     });
   }
-
-  /**
-   * @internal
-   */
-  abstract assertElementHasWorld(): asserts this;
 
   /**
    * If the element is a form input, you can use {@link ElementHandle.autofill}

@@ -20,7 +20,6 @@ import {Page, WaitTimeoutOptions} from '../api/Page.js';
 import {CDPSession} from '../common/Connection.js';
 import {DeviceRequestPrompt} from '../common/DeviceRequestPrompt.js';
 import {EventEmitter} from '../common/EventEmitter.js';
-import {ExecutionContext} from '../common/ExecutionContext.js';
 import {getQueryHandlerAndSelector} from '../common/GetQueryHandler.js';
 import {transposeIterableHandle} from '../common/HandleIterator.js';
 import {
@@ -309,14 +308,7 @@ export abstract class Frame extends EventEmitter {
   /**
    * @internal
    */
-  abstract _client(): CDPSession;
-
-  /**
-   * @internal
-   */
-  executionContext(): Promise<ExecutionContext> {
-    throw new Error('Not implemented');
-  }
+  abstract get client(): CDPSession;
 
   /**
    * @internal

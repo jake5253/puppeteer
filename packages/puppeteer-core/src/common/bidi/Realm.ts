@@ -3,6 +3,7 @@ import * as Bidi from 'chromium-bidi/lib/cjs/protocol/protocol.js';
 import PuppeteerUtil from '../../injected/injected.js';
 import {stringifyFunction} from '../../util/Function.js';
 import {EventEmitter} from '../EventEmitter.js';
+import {UTILITY_WORLD_NAME} from '../FrameManager.js';
 import {scriptInjector} from '../ScriptInjector.js';
 import {EvaluateFunc, HandleFor} from '../types.js';
 import {
@@ -16,6 +17,7 @@ import {Connection} from './Connection.js';
 import {BidiElementHandle} from './ElementHandle.js';
 import {BidiFrame} from './Frame.js';
 import {BidiJSHandle} from './JSHandle.js';
+import {Sandbox} from './Sandbox.js';
 import {BidiSerializer} from './Serializer.js';
 import {createEvaluationError} from './utils.js';
 
@@ -174,20 +176,31 @@ export class Realm extends EventEmitter {
 
     return returnByValue
       ? BidiSerializer.deserialize(result.result)
-      : getBidiHandle(this as any, result.result, this.#frame);
+      : createBidiHandle(
+          (() => {
+            switch (this.#sandbox) {
+              case UTILITY_WORLD_NAME:
+                return this.#frame.isolatedRealm();
+              case undefined:
+                return this.#frame.mainRealm();
+              default:
+                throw new Error('Unknown sandbox');
+            }
+          })(),
+          result.result
+        );
   }
 }
 
 /**
  * @internal
  */
-export function getBidiHandle(
-  realmOrContext: Realm,
-  result: Bidi.Script.RemoteValue,
-  frame: BidiFrame
-): BidiJSHandle | BidiElementHandle<Node> {
+export function createBidiHandle(
+  sandbox: Sandbox,
+  result: Bidi.Script.RemoteValue
+): BidiJSHandle<unknown> | BidiElementHandle<Node> {
   if (result.type === 'node' || result.type === 'window') {
-    return new BidiElementHandle(realmOrContext, result, frame);
+    return new BidiElementHandle(sandbox, result);
   }
-  return new BidiJSHandle(realmOrContext, result);
+  return new BidiJSHandle(sandbox, result);
 }

@@ -66,15 +66,15 @@ export class BidiFrame extends Frame {
 
     const puppeteerRealm = context.createSandboxRealm(UTILITY_WORLD_NAME);
     this.sandboxes = {
-      [MAIN_SANDBOX]: new Sandbox(context, timeoutSettings),
-      [PUPPETEER_SANDBOX]: new Sandbox(puppeteerRealm, timeoutSettings),
+      [MAIN_SANDBOX]: new Sandbox(this, context, timeoutSettings),
+      [PUPPETEER_SANDBOX]: new Sandbox(this, puppeteerRealm, timeoutSettings),
     };
 
     puppeteerRealm.setFrame(this);
     context.setFrame(this);
   }
 
-  override _client(): CDPSession {
+  override get client(): CDPSession {
     return this.context().cdpSession;
   }
 
