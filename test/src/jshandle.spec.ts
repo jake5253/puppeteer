@@ -216,6 +216,47 @@ describe('JSHandle', function () {
     });
   });
 
+  describe('JSHandle.getEnumerableProperties', function () {
+    it('should work', async () => {
+      const {page} = await getTestState();
+
+      using aHandle = await page.evaluateHandle(() => {
+        return {
+          foo: 'bar',
+        };
+      });
+      const properties = await aHandle.getEnumerableProperties();
+      using foo = properties.foo;
+      expect(foo).toBeTruthy();
+      expect(await foo.jsonValue()).toBe('bar');
+    });
+    it('should return even non-own properties', async () => {
+      const {page} = await getTestState();
+
+      using aHandle = await page.evaluateHandle(() => {
+        class A {
+          a: string;
+          constructor() {
+            this.a = '1';
+          }
+        }
+        class B extends A {
+          b: string;
+          constructor() {
+            super();
+            this.b = '2';
+          }
+        }
+        return new B();
+      });
+      const properties = await aHandle.getEnumerableProperties();
+      using a = properties.a;
+      using b = properties.b;
+      expect(await a.jsonValue()).toBe('1');
+      expect(await b.jsonValue()).toBe('2');
+    });
+  });
+
   describe('JSHandle.asElement', function () {
     it('should work', async () => {
       const {page} = await getTestState();

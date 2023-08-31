@@ -149,6 +149,8 @@ export abstract class JSHandle<T = unknown>
    * }
    * children; // holds elementHandles to all children of document.body
    * ```
+   *
+   * @deprecated Use {@link JSHandle.prototype.getEnumerableProperties}.
    */
   async getProperties(): Promise<Map<string, JSHandle>> {
     const propertyNames = await this.evaluate(object => {
@@ -174,6 +176,45 @@ export abstract class JSHandle<T = unknown>
       }
     }
     return map;
+  }
+
+  /**
+   * Gets a record of handles representing the enumerable properties of the handled
+   * object.
+   *
+   * @example
+   *
+   * ```ts
+   * const listHandle = await page.evaluateHandle(() => document.body.children);
+   * const properties = await listHandle.getEnumerableProperties();
+   * const children = [];
+   * for (const property of Object.values(properties)) {
+   *   const element = property.asElement();
+   *   if (element) {
+   *     children.push(element);
+   *   }
+   * }
+   * children; // holds elementHandles to all children of document.body
+   * ```
+   */
+  async getEnumerableProperties(this: JSHandle<object>): Promise<
+    Readonly<{
+      [K in Extract<keyof T, string>]: HandleFor<Awaited<T[K]>>;
+    }>
+  > {
+    const keys = await this.evaluate(object => {
+      // XXX: This is kind-of correct, but we can't do better than this.
+      return Object.keys(object) as Array<Extract<keyof T, string>>;
+    });
+    return Object.freeze(
+      Object.fromEntries(
+        await Promise.all(
+          keys.map(async key => {
+            return [key, await this.getProperty(key)];
+          })
+        )
+      )
+    );
   }
 
   /**

@@ -4,6 +4,10 @@ sidebar_label: JSHandle.getProperties
 
 # JSHandle.getProperties() method
 
+> Warning: This API is now obsolete.
+>
+> Use .
+
 Gets a map of handles representing the properties of the current handle.
 
 #### Signature:

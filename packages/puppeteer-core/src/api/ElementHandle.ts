@@ -189,6 +189,16 @@ export abstract class ElementHandle<
     return this.handle.getProperties();
   }
 
+  override getEnumerableProperties(): Promise<
+    Readonly<{
+      [K in Extract<keyof ElementType, string>]: HandleFor<
+        Awaited<ElementType[K]>
+      >;
+    }>
+  > {
+    return this.handle.getEnumerableProperties();
+  }
+
   /**
    * @internal
    */

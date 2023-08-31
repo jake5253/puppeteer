@@ -29,7 +29,6 @@ import {assert} from '../util/assert.js';
 import {ClickOptions, ElementHandle} from './ElementHandle.js';
 import {Environment} from './Environment.js';
 import {KeyboardTypeOptions} from './Input.js';
-import {JSHandle} from './JSHandle.js';
 
 /**
  * @internal
@@ -44,8 +43,8 @@ export abstract class Realm implements Disposable {
 
   abstract get environment(): Environment;
 
-  abstract adoptHandle<T extends JSHandle<Node>>(handle: T): Promise<T>;
-  abstract transferHandle<T extends JSHandle<Node>>(handle: T): Promise<T>;
+  abstract adoptHandle<T extends ElementHandle<Node>>(handle: T): Promise<T>;
+  abstract transferHandle<T extends ElementHandle<Node>>(handle: T): Promise<T>;
   abstract evaluateHandle<
     Params extends unknown[],
     Func extends EvaluateFunc<Params> = EvaluateFunc<Params>,

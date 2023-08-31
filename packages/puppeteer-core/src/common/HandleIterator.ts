@@ -42,16 +42,17 @@ async function* fastTransposeIteratorHandle<T>(
     }
     return results;
   }, size);
-  const properties = (await array.getProperties()) as Map<string, HandleFor<T>>;
-  const handles = properties.values();
+  const properties = await array.getEnumerableProperties();
+  const handles = Object.values(properties);
+  const handlesIter = handles.values();
   using stack = new DisposableStack();
   stack.defer(() => {
-    for (using handle of handles) {
+    for (using handle of handlesIter) {
       handle[Symbol.dispose]();
     }
   });
-  yield* handles;
-  return properties.size === 0;
+  yield* handlesIter;
+  return handles.length === 0;
 }
 
 /**
