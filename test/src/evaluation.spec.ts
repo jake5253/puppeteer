@@ -422,15 +422,15 @@ describe('Evaluation specs', function () {
     it('should throw a nice error after a navigation', async () => {
       const {page} = await getTestState();
 
-      const executionContext = await page.mainFrame().executionContext();
+      const realm = await page.mainFrame().mainRealm();
 
       await Promise.all([
         page.waitForNavigation(),
-        executionContext.evaluate(() => {
+        realm.evaluate(() => {
           return window.location.reload();
         }),
       ]);
-      const error = await executionContext
+      const error = await realm
         .evaluate(() => {
           return null;
         })

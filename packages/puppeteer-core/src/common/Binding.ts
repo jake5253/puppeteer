@@ -1,7 +1,7 @@
 import {JSHandle} from '../api/JSHandle.js';
 import {isErrorLike} from '../util/ErrorLike.js';
 
-import {ExecutionContext} from './ExecutionContext.js';
+import {IsolatedWorld} from './IsolatedWorld.js';
 import {debugError} from './util.js';
 
 /**
@@ -27,7 +27,7 @@ export class Binding {
    * @param args - Plain arguments from CDP.
    */
   async run(
-    context: ExecutionContext,
+    world: IsolatedWorld,
     id: number,
     args: unknown[],
     isTrivial: boolean
@@ -36,7 +36,7 @@ export class Binding {
     try {
       if (!isTrivial) {
         // Getting non-trivial arguments.
-        using handles = await context.evaluateHandle(
+        using handles = await world.evaluateHandle(
           (name, seq) => {
             // @ts-expect-error Code is evaluated in a different context.
             return globalThis[name].args.get(seq);
@@ -62,7 +62,7 @@ export class Binding {
         }
       }
 
-      await context.evaluate(
+      await world.evaluate(
         (name, seq, result) => {
           // @ts-expect-error Code is evaluated in a different context.
           const callbacks = globalThis[name].callbacks;
@@ -81,7 +81,7 @@ export class Binding {
       }
     } catch (error) {
       if (isErrorLike(error)) {
-        await context
+        await world
           .evaluate(
             (name, seq, message, stack) => {
               const error = new Error(message);
@@ -98,7 +98,7 @@ export class Binding {
           )
           .catch(debugError);
       } else {
-        await context
+        await world
           .evaluate(
             (name, seq, error) => {
               // @ts-expect-error Code is evaluated in a different context.

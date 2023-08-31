@@ -20,13 +20,9 @@ import {Page, WaitTimeoutOptions} from '../api/Page.js';
 import {CDPSession} from '../common/Connection.js';
 import {DeviceRequestPrompt} from '../common/DeviceRequestPrompt.js';
 import {EventEmitter} from '../common/EventEmitter.js';
-import {ExecutionContext} from '../common/ExecutionContext.js';
 import {getQueryHandlerAndSelector} from '../common/GetQueryHandler.js';
 import {transposeIterableHandle} from '../common/HandleIterator.js';
-import {
-  IsolatedWorldChart,
-  WaitForSelectorOptions,
-} from '../common/IsolatedWorld.js';
+import {WaitForSelectorOptions} from '../common/IsolatedWorld.js';
 import {LazyArg} from '../common/LazyArg.js';
 import {PuppeteerLifeCycleEvent} from '../common/LifecycleWatcher.js';
 import {
@@ -199,11 +195,6 @@ export abstract class Frame extends EventEmitter {
   /**
    * @internal
    */
-  worlds!: IsolatedWorldChart;
-
-  /**
-   * @internal
-   */
   _name?: string;
 
   /**
@@ -217,6 +208,11 @@ export abstract class Frame extends EventEmitter {
   constructor() {
     super();
   }
+
+  /**
+   * @internal
+   */
+  abstract get client(): CDPSession;
 
   /**
    * The page associated with the frame.
@@ -305,18 +301,6 @@ export abstract class Frame extends EventEmitter {
     timeout?: number;
     waitUntil?: PuppeteerLifeCycleEvent | PuppeteerLifeCycleEvent[];
   }): Promise<HTTPResponse | null>;
-
-  /**
-   * @internal
-   */
-  abstract _client(): CDPSession;
-
-  /**
-   * @internal
-   */
-  executionContext(): Promise<ExecutionContext> {
-    throw new Error('Not implemented');
-  }
 
   /**
    * @internal

@@ -74,7 +74,7 @@ export class BidiFrame extends Frame {
     context.setFrame(this);
   }
 
-  override _client(): CDPSession {
+  override get client(): CDPSession {
     return this.context().cdpSession;
   }
 

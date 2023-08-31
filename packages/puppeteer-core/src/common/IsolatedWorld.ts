@@ -18,25 +18,38 @@ import {Protocol} from 'devtools-protocol';
 
 import {JSHandle} from '../api/JSHandle.js';
 import {Realm} from '../api/Realm.js';
+import PuppeteerUtil from '../injected/injected.js';
+import {assert} from '../util/assert.js';
+import {AsyncIterableUtil} from '../util/AsyncIterableUtil.js';
 import {Deferred} from '../util/Deferred.js';
+import {stringifyFunction} from '../util/Function.js';
 
+import {ARIAQueryHandler} from './AriaQueryHandler.js';
 import {Binding} from './Binding.js';
 import {CDPSession} from './Connection.js';
-import {ExecutionContext} from './ExecutionContext.js';
+import {CDPElementHandle} from './ElementHandle.js';
 import {CDPFrame} from './Frame.js';
 import {FrameManager} from './FrameManager.js';
-import {MAIN_WORLD, PUPPETEER_WORLD} from './IsolatedWorlds.js';
 import {CDPJSHandle} from './JSHandle.js';
+import {LazyArg} from './LazyArg.js';
 import {LifecycleWatcher, PuppeteerLifeCycleEvent} from './LifecycleWatcher.js';
+import {scriptInjector} from './ScriptInjector.js';
+import {TimeoutSettings} from './TimeoutSettings.js';
 import {BindingPayload, EvaluateFunc, HandleFor} from './types.js';
 import {
-  Mutex,
   addPageBinding,
+  createEvaluationError,
   createJSHandle,
   debugError,
+  getSourcePuppeteerURLIfAvailable,
+  isString,
+  Mutex,
+  PuppeteerURL,
   setPageContent,
+  valueFromRemoteObject,
   withSourcePuppeteerURLIfNone,
 } from './util.js';
+import {WebWorker} from './WebWorker.js';
 
 /**
  * @public
@@ -78,81 +91,84 @@ export interface PageBinding {
   pptrFunction: Function;
 }
 
-/**
- * @internal
- */
-export interface IsolatedWorldChart {
-  [key: string]: IsolatedWorld;
-  [MAIN_WORLD]: IsolatedWorld;
-  [PUPPETEER_WORLD]: IsolatedWorld;
-}
+const SOURCE_URL_REGEX = /^[\040\t]*\/\/[@#] sourceURL=\s*(\S*?)\s*$/m;
 
 /**
  * @internal
  */
 export class IsolatedWorld extends Realm {
-  #frame: CDPFrame;
-  #context = Deferred.create<ExecutionContext>();
-
-  // Set of bindings that have been registered in the current context.
-  #contextBindings = new Set<string>();
+  #owner: CDPFrame | WebWorker;
 
   // Contains mapping from functions that should be bound to Puppeteer functions.
   #bindings = new Map<string, Binding>();
 
-  get _bindings(): Map<string, Binding> {
-    return this.#bindings;
+  #puppeteerUtilBindingsInstalled = false;
+  #puppeteerUtil = new Deferred<JSHandle<PuppeteerUtil>>();
+
+  #contextDescription =
+    Deferred.create<Protocol.Runtime.ExecutionContextDescription>();
+
+  #client!: CDPSession;
+
+  constructor(owner: CDPFrame | WebWorker, timeoutSettings: TimeoutSettings) {
+    super(timeoutSettings);
+    this.#owner = owner;
+    this.updateClient(owner.client);
   }
 
-  constructor(frame: CDPFrame) {
-    super(frame._frameManager.timeoutSettings);
-    this.#frame = frame;
-    this.frameUpdated();
+  updateClient(client: CDPSession): void {
+    if (this.#client === client) {
+      return;
+    }
+    this.#client = client;
+    this.#clientUpdated();
   }
 
-  frameUpdated(): void {
+  #clientUpdated(): void {
     this.#client.on('Runtime.bindingCalled', this.#onBindingCalled);
   }
 
-  get #client(): CDPSession {
-    return this.#frame._client();
+  get client(): CDPSession {
+    return this.#client;
   }
 
   get #frameManager(): FrameManager {
-    return this.#frame._frameManager;
+    return this.frame()._frameManager;
   }
 
   frame(): CDPFrame {
-    return this.#frame;
+    assert(this.#owner instanceof CDPFrame);
+    return this.#owner;
   }
 
-  clearContext(): void {
-    this.#context = Deferred.create();
+  clearContextDescription(): void {
+    if (this.#puppeteerUtil.resolved()) {
+      (this.#puppeteerUtil.value() as JSHandle<PuppeteerUtil>)[
+        Symbol.dispose
+      ]();
+    }
+    this.#bindings.clear();
+    this.#puppeteerUtilBindingsInstalled = false;
   }
 
-  setContext(context: ExecutionContext): void {
-    this.#contextBindings.clear();
-    this.#context.resolve(context);
+  setContextDescription(
+    description: Protocol.Runtime.ExecutionContextDescription
+  ): void {
+    if (this.#contextDescription.finished()) {
+      this.#contextDescription = new Deferred();
+    }
+    if (this.#puppeteerUtil.finished()) {
+      this.#puppeteerUtil = new Deferred();
+    }
+    this.#contextDescription.resolve(description);
     void this.taskManager.rerunAll();
   }
 
   hasContext(): boolean {
-    return this.#context.resolved();
+    return this.#contextDescription.resolved();
   }
 
-  executionContext(): Promise<ExecutionContext> {
-    if (this.disposed) {
-      throw new Error(
-        `Execution context is not available in detached frame "${this.#frame.url()}" (are you trying to evaluate?)`
-      );
-    }
-    if (this.#context === null) {
-      throw new Error(`Execution content promise is missing`);
-    }
-    return this.#context.valueOrThrow();
-  }
-
-  async evaluateHandle<
+  evaluateHandle<
     Params extends unknown[],
     Func extends EvaluateFunc<Params> = EvaluateFunc<Params>,
   >(
@@ -163,11 +179,10 @@ export class IsolatedWorld extends Realm {
       this.evaluateHandle.name,
       pageFunction
     );
-    const context = await this.executionContext();
-    return context.evaluateHandle(pageFunction, ...args);
+    return this.#evaluate(false, pageFunction, ...args);
   }
 
-  async evaluate<
+  evaluate<
     Params extends unknown[],
     Func extends EvaluateFunc<Params> = EvaluateFunc<Params>,
   >(
@@ -178,8 +193,7 @@ export class IsolatedWorld extends Realm {
       this.evaluate.name,
       pageFunction
     );
-    const context = await this.executionContext();
-    return context.evaluate(pageFunction, ...args);
+    return this.#evaluate(true, pageFunction, ...args);
   }
 
   async setContent(
@@ -198,7 +212,7 @@ export class IsolatedWorld extends Realm {
 
     const watcher = new LifecycleWatcher(
       this.#frameManager.networkManager,
-      this.#frame,
+      this.frame(),
       waitUntil,
       timeout
     );
@@ -215,33 +229,23 @@ export class IsolatedWorld extends Realm {
   // If multiple waitFor are set up asynchronously, we need to wait for the
   // first one to set up the binding in the page before running the others.
   #mutex = new Mutex();
-  async _addBindingToContext(
-    context: ExecutionContext,
-    name: string
-  ): Promise<void> {
-    if (this.#contextBindings.has(name)) {
+  async #installBinding(binding: Binding): Promise<void> {
+    const {id: executionContextId} =
+      await this.#contextDescription.valueOrThrow();
+
+    if (this.#bindings.has(binding.name)) {
       return;
     }
+    this.#bindings.set(binding.name, binding);
 
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
     using _ = await this.#mutex.acquire();
     try {
-      await context._client.send(
-        'Runtime.addBinding',
-        context._contextName
-          ? {
-              name,
-              executionContextName: context._contextName,
-            }
-          : {
-              name,
-              executionContextId: context._contextId,
-            }
-      );
-
-      await context.evaluate(addPageBinding, 'internal', name);
-
-      this.#contextBindings.add(name);
+      await this.client.send('Runtime.addBinding', {
+        name: binding.name,
+        executionContextId,
+      });
+      await this.evaluate(addPageBinding, 'internal', binding.name);
     } catch (error) {
       // We could have tried to evaluate in a context which was already
       // destroyed. This happens, for example, if the page is navigated while
@@ -264,6 +268,7 @@ export class IsolatedWorld extends Realm {
   #onBindingCalled = async (
     event: Protocol.Runtime.BindingCalledEvent
   ): Promise<void> => {
+    const {id: contextId} = await this.#contextDescription.valueOrThrow();
     let payload: BindingPayload;
     try {
       payload = JSON.parse(event.payload);
@@ -276,18 +281,14 @@ export class IsolatedWorld extends Realm {
     if (type !== 'internal') {
       return;
     }
-    if (!this.#contextBindings.has(name)) {
+    if (event.executionContextId !== contextId) {
       return;
     }
 
     try {
-      const context = await this.#context.valueOrThrow();
-      if (event.executionContextId !== context._contextId) {
-        return;
-      }
-
-      const binding = this._bindings.get(name);
-      await binding?.run(context, seq, args, isTrivial);
+      const binding = this.#bindings.get(name);
+      assert(binding);
+      await binding.run(this, seq, args, isTrivial);
     } catch (err) {
       debugError(err);
     }
@@ -296,19 +297,17 @@ export class IsolatedWorld extends Realm {
   async adoptBackendNode(
     backendNodeId?: Protocol.DOM.BackendNodeId
   ): Promise<JSHandle<Node>> {
-    const executionContext = await this.executionContext();
-    const {object} = await this.#client.send('DOM.resolveNode', {
+    const {id: executionContextId} =
+      await this.#contextDescription.valueOrThrow();
+    const {object} = await this.client.send('DOM.resolveNode', {
       backendNodeId: backendNodeId,
-      executionContextId: executionContext._contextId,
+      executionContextId,
     });
-    return createJSHandle(executionContext, object) as JSHandle<Node>;
+    return createJSHandle(this, object) as JSHandle<Node>;
   }
 
   async adoptHandle<T extends JSHandle<Node>>(handle: T): Promise<T> {
-    const context = await this.executionContext();
-    if (
-      (handle as unknown as CDPJSHandle<Node>).executionContext() === context
-    ) {
+    if ((handle as unknown as CDPJSHandle<Node>).world === this) {
       // If the context has already adopted this handle, clone it so downstream
       // disposal doesn't become an issue.
       return (await handle.evaluateHandle(value => {
@@ -316,20 +315,17 @@ export class IsolatedWorld extends Realm {
         // SAFETY: We know the
       })) as unknown as T;
     }
-    const nodeInfo = await this.#client.send('DOM.describeNode', {
+    const nodeInfo = await this.client.send('DOM.describeNode', {
       objectId: handle.id,
     });
     return (await this.adoptBackendNode(nodeInfo.node.backendNodeId)) as T;
   }
 
   async transferHandle<T extends JSHandle<Node>>(handle: T): Promise<T> {
-    const context = await this.executionContext();
-    if (
-      (handle as unknown as CDPJSHandle<Node>).executionContext() === context
-    ) {
+    if ((handle as unknown as CDPJSHandle<Node>).world === this) {
       return handle;
     }
-    const info = await this.#client.send('DOM.describeNode', {
+    const info = await this.client.send('DOM.describeNode', {
       objectId: handle.remoteObject().objectId,
     });
     const newHandle = (await this.adoptBackendNode(
@@ -339,8 +335,217 @@ export class IsolatedWorld extends Realm {
     return newHandle;
   }
 
+  get puppeteerUtil(): Promise<JSHandle<PuppeteerUtil>> {
+    let promise = Promise.resolve() as Promise<unknown>;
+    if (!this.#puppeteerUtilBindingsInstalled) {
+      promise = Promise.all([
+        this.#installBinding(
+          new Binding(
+            '__ariaQuerySelector',
+            ARIAQueryHandler.queryOne as (...args: unknown[]) => unknown
+          )
+        ),
+        this.#installBinding(
+          new Binding('__ariaQuerySelectorAll', (async (
+            element: CDPElementHandle<Node>,
+            selector: string
+          ): Promise<JSHandle<Node[]>> => {
+            const results = ARIAQueryHandler.queryAll(element, selector);
+            return (element as unknown as CDPJSHandle<Node>).evaluateHandle(
+              (...elements) => {
+                return elements;
+              },
+              ...(await AsyncIterableUtil.collect(results))
+            );
+          }) as (...args: unknown[]) => unknown)
+        ),
+      ]);
+      this.#puppeteerUtilBindingsInstalled = true;
+    }
+    scriptInjector.inject(async script => {
+      if (this.#puppeteerUtil.resolved()) {
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        using _ = this.#puppeteerUtil.value() as JSHandle<PuppeteerUtil>;
+        this.#puppeteerUtil = new Deferred();
+      }
+      await promise;
+      try {
+        using handle = (await this.evaluateHandle(
+          script
+        )) as JSHandle<PuppeteerUtil>;
+        this.#puppeteerUtil.resolve(handle.move());
+      } catch (error) {
+        this.#puppeteerUtil.reject(error as Error);
+      }
+    }, !this.#puppeteerUtil.resolved());
+    return this.#puppeteerUtil.valueOrThrow();
+  }
+
+  async #evaluate<
+    Params extends unknown[],
+    Func extends EvaluateFunc<Params> = EvaluateFunc<Params>,
+  >(
+    returnByValue: true,
+    pageFunction: Func | string,
+    ...args: Params
+  ): Promise<Awaited<ReturnType<Func>>>;
+  async #evaluate<
+    Params extends unknown[],
+    Func extends EvaluateFunc<Params> = EvaluateFunc<Params>,
+  >(
+    returnByValue: false,
+    pageFunction: Func | string,
+    ...args: Params
+  ): Promise<HandleFor<Awaited<ReturnType<Func>>>>;
+  async #evaluate<
+    Params extends unknown[],
+    Func extends EvaluateFunc<Params> = EvaluateFunc<Params>,
+  >(
+    returnByValue: boolean,
+    pageFunction: Func | string,
+    ...args: Params
+  ): Promise<HandleFor<Awaited<ReturnType<Func>>> | Awaited<ReturnType<Func>>> {
+    const sourceUrlComment = getSourceUrlComment(
+      getSourcePuppeteerURLIfAvailable(pageFunction)?.toString() ??
+        PuppeteerURL.INTERNAL_URL
+    );
+
+    const {id: contextId} = await this.#contextDescription.valueOrThrow();
+
+    if (isString(pageFunction)) {
+      const expression = pageFunction;
+      const expressionWithSourceUrl = SOURCE_URL_REGEX.test(expression)
+        ? expression
+        : `${expression}\n${sourceUrlComment}\n`;
+
+      const {exceptionDetails, result: remoteObject} = await this.client
+        .send('Runtime.evaluate', {
+          expression: expressionWithSourceUrl,
+          contextId,
+          returnByValue,
+          awaitPromise: true,
+          userGesture: true,
+        })
+        .catch(rewriteError);
+
+      if (exceptionDetails) {
+        throw createEvaluationError(exceptionDetails);
+      }
+
+      return returnByValue
+        ? valueFromRemoteObject(remoteObject)
+        : createJSHandle(this, remoteObject);
+    }
+
+    const functionDeclaration = stringifyFunction(pageFunction);
+    const functionDeclarationWithSourceUrl = SOURCE_URL_REGEX.test(
+      functionDeclaration
+    )
+      ? functionDeclaration
+      : `${functionDeclaration}\n${sourceUrlComment}\n`;
+    let callFunctionOnPromise;
+    try {
+      callFunctionOnPromise = this.client.send('Runtime.callFunctionOn', {
+        functionDeclaration: functionDeclarationWithSourceUrl,
+        executionContextId: contextId,
+        arguments: await Promise.all(args.map(serializeArgument.bind(this))),
+        returnByValue,
+        awaitPromise: true,
+        userGesture: true,
+      });
+    } catch (error) {
+      if (
+        error instanceof TypeError &&
+        error.message.startsWith('Converting circular structure to JSON')
+      ) {
+        error.message += ' Recursive objects are not allowed.';
+      }
+      throw error;
+    }
+    const {exceptionDetails, result: remoteObject} =
+      await callFunctionOnPromise.catch(rewriteError);
+    if (exceptionDetails) {
+      throw createEvaluationError(exceptionDetails);
+    }
+    return returnByValue
+      ? valueFromRemoteObject(remoteObject)
+      : createJSHandle(this, remoteObject);
+  }
+
   [Symbol.dispose](): void {
     super[Symbol.dispose]();
-    this.#client.off('Runtime.bindingCalled', this.#onBindingCalled);
+    this.client.off('Runtime.bindingCalled', this.#onBindingCalled);
   }
+}
+
+function rewriteError(error: Error): Protocol.Runtime.EvaluateResponse {
+  if (error.message.includes('Object reference chain is too long')) {
+    return {result: {type: 'undefined'}};
+  }
+  if (error.message.includes("Object couldn't be returned by value")) {
+    return {result: {type: 'undefined'}};
+  }
+
+  if (
+    error.message.endsWith('Cannot find context with specified id') ||
+    error.message.endsWith('Inspected target navigated or closed')
+  ) {
+    throw new Error(
+      'Execution context was destroyed, most likely because of a navigation.'
+    );
+  }
+  throw error;
+}
+
+function getSourceUrlComment(url: string) {
+  return `//# sourceURL=${url}`;
+}
+
+async function serializeArgument(
+  this: IsolatedWorld,
+  arg: unknown
+): Promise<Protocol.Runtime.CallArgument> {
+  if (arg instanceof LazyArg) {
+    arg = await arg.get(this);
+  }
+  if (typeof arg === 'bigint') {
+    // eslint-disable-line valid-typeof
+    return {unserializableValue: `${arg.toString()}n`};
+  }
+  if (Object.is(arg, -0)) {
+    return {unserializableValue: '-0'};
+  }
+  if (Object.is(arg, Infinity)) {
+    return {unserializableValue: 'Infinity'};
+  }
+  if (Object.is(arg, -Infinity)) {
+    return {unserializableValue: '-Infinity'};
+  }
+  if (Object.is(arg, NaN)) {
+    return {unserializableValue: 'NaN'};
+  }
+  const objectHandle =
+    arg && (arg instanceof CDPJSHandle || arg instanceof CDPElementHandle)
+      ? arg
+      : null;
+  if (objectHandle) {
+    if (objectHandle.world !== this) {
+      throw new Error(
+        'JSHandles can be evaluated only in the context they were created!'
+      );
+    }
+    if (objectHandle.disposed) {
+      throw new Error('JSHandle is disposed!');
+    }
+    if (objectHandle.remoteObject().unserializableValue) {
+      return {
+        unserializableValue: objectHandle.remoteObject().unserializableValue,
+      };
+    }
+    if (!objectHandle.remoteObject().objectId) {
+      return {value: objectHandle.remoteObject().value};
+    }
+    return {objectId: objectHandle.remoteObject().objectId};
+  }
+  return {value: arg};
 }

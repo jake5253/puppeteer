@@ -28,10 +28,8 @@ import {
   DeviceRequestPrompt,
   DeviceRequestPromptManager,
 } from './DeviceRequestPrompt.js';
-import {ExecutionContext} from './ExecutionContext.js';
 import {FrameManager} from './FrameManager.js';
 import {IsolatedWorld} from './IsolatedWorld.js';
-import {MAIN_WORLD, PUPPETEER_WORLD} from './IsolatedWorlds.js';
 import {LifecycleWatcher, PuppeteerLifeCycleEvent} from './LifecycleWatcher.js';
 
 /**
@@ -56,6 +54,8 @@ export class CDPFrame extends Frame {
   #url = '';
   #detached = false;
   #client!: CDPSession;
+  #isolatedWorld: IsolatedWorld;
+  #mainWorld: IsolatedWorld;
 
   _frameManager: FrameManager;
   override _id: string;
@@ -71,14 +71,18 @@ export class CDPFrame extends Frame {
   ) {
     super();
     this._frameManager = frameManager;
-    this.#url = '';
     this._id = frameId;
     this._parentId = parentFrameId;
-    this.#detached = false;
+    this.#client = client;
 
-    this._loaderId = '';
-
-    this.updateClient(client);
+    this.#isolatedWorld = new IsolatedWorld(
+      this,
+      this._frameManager.timeoutSettings
+    );
+    this.#mainWorld = new IsolatedWorld(
+      this,
+      this._frameManager.timeoutSettings
+    );
 
     this.on(FrameEmittedEvents.FrameSwappedByActivation, () => {
       // Emulate loading process for swapped frames.
@@ -95,17 +99,14 @@ export class CDPFrame extends Frame {
     this._id = id;
   }
 
-  updateClient(client: CDPSession, keepWorlds = false): void {
+  updateClient(client: CDPSession, reset = true): void {
     this.#client = client;
-    if (!keepWorlds) {
-      this.worlds = {
-        [MAIN_WORLD]: new IsolatedWorld(this),
-        [PUPPETEER_WORLD]: new IsolatedWorld(this),
-      };
-    } else {
-      this.worlds[MAIN_WORLD].frameUpdated();
-      this.worlds[PUPPETEER_WORLD].frameUpdated();
+    if (reset) {
+      this.#mainWorld.clearContextDescription();
+      this.#isolatedWorld.clearContextDescription();
     }
+    this.#mainWorld.updateClient(client);
+    this.#isolatedWorld.updateClient(client);
   }
 
   override page(): Page {
@@ -232,20 +233,16 @@ export class CDPFrame extends Frame {
     }
   }
 
-  override _client(): CDPSession {
+  override get client(): CDPSession {
     return this.#client;
   }
 
-  override executionContext(): Promise<ExecutionContext> {
-    return this.worlds[MAIN_WORLD].executionContext();
-  }
-
   override mainRealm(): IsolatedWorld {
-    return this.worlds[MAIN_WORLD];
+    return this.#mainWorld;
   }
 
   override isolatedRealm(): IsolatedWorld {
-    return this.worlds[PUPPETEER_WORLD];
+    return this.#isolatedWorld;
   }
 
   @throwIfDetached
@@ -322,7 +319,7 @@ export class CDPFrame extends Frame {
       return;
     }
     this.#detached = true;
-    this.worlds[MAIN_WORLD][Symbol.dispose]();
-    this.worlds[PUPPETEER_WORLD][Symbol.dispose]();
+    this.#mainWorld[Symbol.dispose]();
+    this.#isolatedWorld[Symbol.dispose]();
   }
 }

@@ -21,7 +21,7 @@ import {assert} from '../util/assert.js';
 
 import {CDPSession} from './Connection.js';
 import type {CDPElementHandle} from './ElementHandle.js';
-import {ExecutionContext} from './ExecutionContext.js';
+import {IsolatedWorld} from './IsolatedWorld.js';
 import {EvaluateFuncWith, HandleFor, HandleOr} from './types.js';
 import {
   createJSHandle,
@@ -35,7 +35,7 @@ import {
  */
 export class CDPJSHandle<T = unknown> extends JSHandle<T> {
   #disposed = false;
-  #context: ExecutionContext;
+  #world: IsolatedWorld;
   #remoteObject: Protocol.Runtime.RemoteObject;
 
   override get disposed(): boolean {
@@ -43,26 +43,23 @@ export class CDPJSHandle<T = unknown> extends JSHandle<T> {
   }
 
   constructor(
-    context: ExecutionContext,
+    world: IsolatedWorld,
     remoteObject: Protocol.Runtime.RemoteObject
   ) {
     super();
-    this.#context = context;
+    this.#world = world;
     this.#remoteObject = remoteObject;
   }
 
-  executionContext(): ExecutionContext {
-    return this.#context;
+  get world(): IsolatedWorld {
+    return this.#world;
   }
 
   get client(): CDPSession {
-    return this.#context._client;
+    return this.#world.client;
   }
 
-  /**
-   * @see {@link ExecutionContext.evaluate} for more details.
-   */
-  override async evaluate<
+  override evaluate<
     Params extends unknown[],
     Func extends EvaluateFuncWith<T, Params> = EvaluateFuncWith<T, Params>,
   >(
@@ -73,13 +70,10 @@ export class CDPJSHandle<T = unknown> extends JSHandle<T> {
       this.evaluate.name,
       pageFunction
     );
-    return await this.executionContext().evaluate(pageFunction, this, ...args);
+    return this.#world.evaluate(pageFunction, this, ...args);
   }
 
-  /**
-   * @see {@link ExecutionContext.evaluateHandle} for more details.
-   */
-  override async evaluateHandle<
+  override evaluateHandle<
     Params extends unknown[],
     Func extends EvaluateFuncWith<T, Params> = EvaluateFuncWith<T, Params>,
   >(
@@ -90,11 +84,7 @@ export class CDPJSHandle<T = unknown> extends JSHandle<T> {
       this.evaluateHandle.name,
       pageFunction
     );
-    return await this.executionContext().evaluateHandle(
-      pageFunction,
-      this,
-      ...args
-    );
+    return this.#world.evaluateHandle(pageFunction, this, ...args);
   }
 
   override async getProperty<K extends keyof T>(
@@ -122,7 +112,7 @@ export class CDPJSHandle<T = unknown> extends JSHandle<T> {
       if (!property.enumerable || !property.value) {
         continue;
       }
-      result.set(property.name, createJSHandle(this.#context, property.value));
+      result.set(property.name, createJSHandle(this.#world, property.value));
     }
     return result;
   }

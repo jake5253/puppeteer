@@ -1270,11 +1270,6 @@ export abstract class ElementHandle<
   }
 
   /**
-   * @internal
-   */
-  abstract assertElementHasWorld(): asserts this;
-
-  /**
    * If the element is a form input, you can use {@link ElementHandle.autofill}
    * to test if the form is compatible with the browser's autofill
    * implementation. Throws an error if the form cannot be autofilled.

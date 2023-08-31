@@ -22,10 +22,9 @@ import {assert} from '../util/assert.js';
 import {throwIfDisposed} from '../util/decorators.js';
 
 import {CDPSession} from './Connection.js';
-import {ExecutionContext} from './ExecutionContext.js';
 import {CDPFrame} from './Frame.js';
 import {FrameManager} from './FrameManager.js';
-import {WaitForSelectorOptions} from './IsolatedWorld.js';
+import {IsolatedWorld, WaitForSelectorOptions} from './IsolatedWorld.js';
 import {CDPJSHandle} from './JSHandle.js';
 import {NodeFor} from './types.js';
 import {debugError} from './util.js';
@@ -40,20 +39,21 @@ import {debugError} from './util.js';
 export class CDPElementHandle<
   ElementType extends Node = Element,
 > extends ElementHandle<ElementType> {
-  #frame: CDPFrame;
   declare handle: CDPJSHandle<ElementType>;
 
   constructor(
-    context: ExecutionContext,
-    remoteObject: Protocol.Runtime.RemoteObject,
-    frame: CDPFrame
+    world: IsolatedWorld,
+    remoteObject: Protocol.Runtime.RemoteObject
   ) {
-    super(new CDPJSHandle(context, remoteObject));
-    this.#frame = frame;
+    super(new CDPJSHandle(world, remoteObject));
   }
 
-  executionContext(): ExecutionContext {
-    return this.handle.executionContext();
+  get #frame() {
+    return this.world.frame();
+  }
+
+  get world(): IsolatedWorld {
+    return this.handle.world;
   }
 
   get client(): CDPSession {
@@ -326,9 +326,5 @@ export class CDPElementHandle<
       frameId,
       card: data.creditCard,
     });
-  }
-
-  override assertElementHasWorld(): asserts this {
-    assert(this.executionContext()._world);
   }
 }

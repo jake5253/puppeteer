@@ -106,12 +106,9 @@ export class ARIAQueryHandler extends QueryHandler {
     element: ElementHandle<Node>,
     selector: string
   ): AwaitableIterable<ElementHandle<Node>> {
-    const context = (
-      element as unknown as CDPJSHandle<Node>
-    ).executionContext();
+    const world = (element as unknown as CDPJSHandle<Node>).world;
     const {name, role} = parseARIASelector(selector);
-    const results = await queryAXTree(context._client, element, name, role);
-    const world = context._world!;
+    const results = await queryAXTree(world.client, element, name, role);
     yield* AsyncIterableUtil.map(results, node => {
       return world.adoptBackendNode(node.backendDOMNodeId) as Promise<
         ElementHandle<Node>

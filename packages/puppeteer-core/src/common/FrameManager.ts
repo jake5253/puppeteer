@@ -29,11 +29,9 @@ import {
 } from './Connection.js';
 import {DeviceRequestPromptManager} from './DeviceRequestPrompt.js';
 import {EventEmitter} from './EventEmitter.js';
-import {ExecutionContext} from './ExecutionContext.js';
 import {CDPFrame, FrameEmittedEvents} from './Frame.js';
 import {FrameTree} from './FrameTree.js';
 import {IsolatedWorld} from './IsolatedWorld.js';
-import {MAIN_WORLD, PUPPETEER_WORLD} from './IsolatedWorlds.js';
 import {NetworkManager} from './NetworkManager.js';
 import {CDPTarget} from './Target.js';
 import {TimeoutSettings} from './TimeoutSettings.js';
@@ -72,7 +70,7 @@ export class FrameManager extends EventEmitter {
   #page: Page;
   #networkManager: NetworkManager;
   #timeoutSettings: TimeoutSettings;
-  #contextIdToContext = new Map<string, ExecutionContext>();
+  #attachedWorlds = new Map<string, IsolatedWorld>();
   #isolatedWorlds = new Set<string>();
   #client: CDPSession;
 
@@ -164,10 +162,10 @@ export class FrameManager extends EventEmitter {
       this.#frameNavigatedReceived.add(this.#client._target()._targetId);
       this._frameTree.removeFrame(frame);
       frame.updateId(this.#client._target()._targetId);
-      frame.mainRealm().clearContext();
-      frame.isolatedRealm().clearContext();
+      frame.mainRealm().clearContextDescription();
+      frame.isolatedRealm().clearContextDescription();
       this._frameTree.addFrame(frame);
-      frame.updateClient(client, true);
+      frame.updateClient(client, false);
     }
     this.setupEventListeners(client);
     client.once(CDPSessionEmittedEvents.Disconnected, () => {
@@ -250,20 +248,20 @@ export class FrameManager extends EventEmitter {
     }
   }
 
-  executionContextById(
+  worldById(
     contextId: number,
     session: CDPSession = this.#client
-  ): ExecutionContext {
-    const context = this.getExecutionContextById(contextId, session);
+  ): IsolatedWorld {
+    const context = this.getWorldById(contextId, session);
     assert(context, 'INTERNAL ERROR: missing context with id = ' + contextId);
     return context;
   }
 
-  getExecutionContextById(
+  getWorldById(
     contextId: number,
     session: CDPSession = this.#client
-  ): ExecutionContext | undefined {
-    return this.#contextIdToContext.get(`${session.id()}:${contextId}`);
+  ): IsolatedWorld | undefined {
+    return this.#attachedWorlds.get(`${session.id()}:${contextId}`);
   }
 
   page(): Page {
@@ -431,7 +429,7 @@ export class FrameManager extends EventEmitter {
     await Promise.all(
       this.frames()
         .filter(frame => {
-          return frame._client() === session;
+          return frame.client === session;
         })
         .map(frame => {
           // Frames might be removed before we send this, so we don't want to
@@ -480,40 +478,37 @@ export class FrameManager extends EventEmitter {
   }
 
   #onExecutionContextCreated(
-    contextPayload: Protocol.Runtime.ExecutionContextDescription,
+    description: Protocol.Runtime.ExecutionContextDescription,
     session: CDPSession
   ): void {
-    const auxData = contextPayload.auxData as {frameId?: string} | undefined;
+    const auxData = description.auxData as {frameId?: string} | undefined;
     const frameId = auxData && auxData.frameId;
     const frame = typeof frameId === 'string' ? this.frame(frameId) : undefined;
     let world: IsolatedWorld | undefined;
     if (frame) {
       // Only care about execution contexts created for the current session.
-      if (frame._client() !== session) {
+      if (frame.client !== session) {
         return;
       }
-      if (contextPayload.auxData && contextPayload.auxData['isDefault']) {
-        world = frame.worlds[MAIN_WORLD];
+      if (description.auxData && description.auxData['isDefault']) {
+        world = frame.mainRealm();
       } else if (
-        contextPayload.name === UTILITY_WORLD_NAME &&
-        !frame.worlds[PUPPETEER_WORLD].hasContext()
+        description.name === UTILITY_WORLD_NAME &&
+        !frame.isolatedRealm().hasContext()
       ) {
         // In case of multiple sessions to the same target, there's a race between
         // connections so we might end up creating multiple isolated worlds.
         // We can use either.
-        world = frame.worlds[PUPPETEER_WORLD];
+        world = frame.isolatedRealm();
       }
     }
-    const context = new ExecutionContext(
-      frame?._client() || this.#client,
-      contextPayload,
-      world
-    );
-    if (world) {
-      world.setContext(context);
+    // No world means the context does not concern us.
+    if (!world) {
+      return;
     }
-    const key = `${session.id()}:${contextPayload.id}`;
-    this.#contextIdToContext.set(key, context);
+    world.setContextDescription(description);
+    const key = `${session.id()}:${description.id}`;
+    this.#attachedWorlds.set(key, world);
   }
 
   #onExecutionContextDestroyed(
@@ -521,27 +516,23 @@ export class FrameManager extends EventEmitter {
     session: CDPSession
   ): void {
     const key = `${session.id()}:${executionContextId}`;
-    const context = this.#contextIdToContext.get(key);
-    if (!context) {
+    const world = this.#attachedWorlds.get(key);
+    if (!world) {
       return;
     }
-    this.#contextIdToContext.delete(key);
-    if (context._world) {
-      context._world.clearContext();
-    }
+    world.clearContextDescription();
+    this.#attachedWorlds.delete(key);
   }
 
   #onExecutionContextsCleared(session: CDPSession): void {
-    for (const [key, context] of this.#contextIdToContext.entries()) {
+    for (const [key, world] of this.#attachedWorlds.entries()) {
       // Make sure to only clear execution contexts that belong
       // to the current session.
-      if (context._client !== session) {
+      if (world.client !== session) {
         continue;
       }
-      if (context._world) {
-        context._world.clearContext();
-      }
-      this.#contextIdToContext.delete(key);
+      world.clearContextDescription();
+      this.#attachedWorlds.delete(key);
     }
   }
 

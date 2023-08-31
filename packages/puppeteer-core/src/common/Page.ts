@@ -57,9 +57,9 @@ import {EmulationManager} from './EmulationManager.js';
 import {TargetCloseError} from './Errors.js';
 import {Handler} from './EventEmitter.js';
 import {FileChooser} from './FileChooser.js';
+import {CDPFrame} from './Frame.js';
 import {FrameManager, FrameManagerEmittedEvents} from './FrameManager.js';
 import {CDPKeyboard, CDPMouse, CDPTouchscreen} from './Input.js';
-import {MAIN_WORLD} from './IsolatedWorlds.js';
 import {
   Credentials,
   NetworkConditions,
@@ -362,9 +362,11 @@ export class CDPPage extends Page {
     assert(frame, 'This should never happen.');
 
     // This is guaranteed to be an HTMLInputElement handle by the event.
-    using handle = (await frame.worlds[MAIN_WORLD].adoptBackendNode(
-      event.backendNodeId
-    )) as ElementHandle<HTMLInputElement>;
+    using handle = (await frame
+      .mainRealm()
+      .adoptBackendNode(
+        event.backendNodeId
+      )) as ElementHandle<HTMLInputElement>;
 
     const fileChooser = new FileChooser(handle.move(), event);
     for (const promise of this.#fileChooserDeferreds) {
@@ -450,7 +452,7 @@ export class CDPPage extends Page {
     }
   }
 
-  override mainFrame(): Frame {
+  override mainFrame(): CDPFrame {
     return this.#frameManager.mainFrame();
   }
 
@@ -531,23 +533,24 @@ export class CDPPage extends Page {
       this.evaluateHandle.name,
       pageFunction
     );
-    const context = await this.mainFrame().executionContext();
-    return context.evaluateHandle(pageFunction, ...args);
+    return this.mainFrame()
+      .mainRealm()
+      .evaluateHandle(pageFunction, ...args);
   }
 
   override async queryObjects<Prototype>(
     prototypeHandle: JSHandle<Prototype>
   ): Promise<JSHandle<Prototype[]>> {
-    const context = await this.mainFrame().executionContext();
+    const world = await this.mainFrame().mainRealm();
     assert(!prototypeHandle.disposed, 'Prototype JSHandle is disposed!');
     assert(
       prototypeHandle.id,
       'Prototype JSHandle must not be referencing primitive value'
     );
-    const response = await context._client.send('Runtime.queryObjects', {
+    const response = await world.client.send('Runtime.queryObjects', {
       prototypeObjectId: prototypeHandle.id,
     });
-    return createJSHandle(context, response.objects) as HandleFor<Prototype[]>;
+    return createJSHandle(world, response.objects) as HandleFor<Prototype[]>;
   }
 
   override async cookies(
@@ -754,7 +757,7 @@ export class CDPPage extends Page {
       // @see https://github.com/puppeteer/puppeteer/issues/3865
       return;
     }
-    const context = this.#frameManager.getExecutionContextById(
+    const context = this.#frameManager.getWorldById(
       event.executionContextId,
       this.#client
     );
@@ -790,7 +793,7 @@ export class CDPPage extends Page {
       return;
     }
 
-    const context = this.#frameManager.executionContextById(
+    const context = this.#frameManager.worldById(
       event.executionContextId,
       this.#client
     );

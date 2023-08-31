@@ -17,6 +17,7 @@
 import expect from 'expect';
 import {Frame} from 'puppeteer-core/internal/api/Frame.js';
 import {CDPSession} from 'puppeteer-core/internal/common/Connection.js';
+import {IsolatedWorld} from 'puppeteer-core/internal/common/IsolatedWorld.js';
 
 import {getTestState, setupTestBrowserHooks} from './mocha-utils.js';
 import {
@@ -38,13 +39,13 @@ describe('Frame specs', function () {
       await attachFrame(page, 'frame1', server.EMPTY_PAGE);
       expect(page.frames()).toHaveLength(2);
       const [frame1, frame2] = page.frames();
-      const context1 = await frame1!.executionContext();
-      const context2 = await frame2!.executionContext();
+      const context1 = await frame1!.mainRealm();
+      const context2 = await frame2!.mainRealm();
       expect(context1).toBeTruthy();
       expect(context2).toBeTruthy();
       expect(context1 !== context2).toBeTruthy();
-      expect(context1._world?.frame()).toBe(frame1);
-      expect(context2._world?.frame()).toBe(frame2);
+      expect((context1 as IsolatedWorld).frame()).toBe(frame1);
+      expect((context2 as IsolatedWorld).frame()).toBe(frame2);
 
       await Promise.all([
         context1.evaluate(() => {
@@ -85,6 +86,11 @@ describe('Frame specs', function () {
       const {page, server} = await getTestState();
 
       const frame1 = (await attachFrame(page, 'frame1', server.EMPTY_PAGE))!;
+      await expect(
+        frame1.evaluate(() => {
+          return 7 * 8;
+        })
+      ).resolves.toBe(56);
       await detachFrame(page, 'frame1');
       let error: Error | undefined;
       try {
@@ -338,7 +344,7 @@ describe('Frame specs', function () {
   describe('Frame.client', function () {
     it('should return the client instance', async () => {
       const {page} = await getTestState();
-      expect(page.mainFrame()._client()).toBeInstanceOf(CDPSession);
+      expect(page.mainFrame().client).toBeInstanceOf(CDPSession);
     });
   });
 });

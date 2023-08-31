@@ -15,13 +15,14 @@
  */
 import {Protocol} from 'devtools-protocol';
 
-import {Deferred} from '../util/Deferred.js';
+import {Realm} from '../api/Realm.js';
 
 import {CDPSession} from './Connection.js';
 import {ConsoleMessageType} from './ConsoleMessage.js';
 import {EventEmitter} from './EventEmitter.js';
-import {ExecutionContext} from './ExecutionContext.js';
+import {IsolatedWorld} from './IsolatedWorld.js';
 import {CDPJSHandle} from './JSHandle.js';
+import {TimeoutSettings} from './TimeoutSettings.js';
 import {EvaluateFunc, HandleFor} from './types.js';
 import {debugError, withSourcePuppeteerURLIfNone} from './util.js';
 
@@ -68,9 +69,10 @@ export type ExceptionThrownCallback = (
  * @public
  */
 export class WebWorker extends EventEmitter {
-  #executionContext = Deferred.create<ExecutionContext>();
+  #world: IsolatedWorld;
   #client: CDPSession;
   #url: string;
+  #timeoutSettings = new TimeoutSettings();
 
   /**
    * @internal
@@ -84,18 +86,17 @@ export class WebWorker extends EventEmitter {
     super();
     this.#client = client;
     this.#url = url;
+    this.#world = new IsolatedWorld(this, this.#timeoutSettings);
 
     this.#client.once('Runtime.executionContextCreated', async event => {
-      const context = new ExecutionContext(client, event.context);
-      this.#executionContext.resolve(context);
+      this.#world.setContextDescription(event.context);
     });
     this.#client.on('Runtime.consoleAPICalled', async event => {
       try {
-        const context = await this.#executionContext.valueOrThrow();
         return consoleAPICalled(
           event.type,
           event.args.map((object: Protocol.Runtime.RemoteObject) => {
-            return new CDPJSHandle(context, object);
+            return new CDPJSHandle(this.#world, object);
           }),
           event.stackTrace
         );
@@ -112,8 +113,8 @@ export class WebWorker extends EventEmitter {
   /**
    * @internal
    */
-  async executionContext(): Promise<ExecutionContext> {
-    return this.#executionContext.valueOrThrow();
+  get timeoutSettings(): TimeoutSettings {
+    return this.#timeoutSettings;
   }
 
   /**
@@ -121,6 +122,13 @@ export class WebWorker extends EventEmitter {
    */
   url(): string {
     return this.#url;
+  }
+
+  /**
+   * @internal
+   */
+  mainRealm(): Realm {
+    return this.#world;
   }
 
   /**
@@ -155,8 +163,7 @@ export class WebWorker extends EventEmitter {
       this.evaluate.name,
       pageFunction
     );
-    const context = await this.#executionContext.valueOrThrow();
-    return context.evaluate(pageFunction, ...args);
+    return this.#world.evaluate(pageFunction, ...args);
   }
 
   /**
@@ -182,7 +189,6 @@ export class WebWorker extends EventEmitter {
       this.evaluateHandle.name,
       pageFunction
     );
-    const context = await this.#executionContext.valueOrThrow();
-    return context.evaluateHandle(pageFunction, ...args);
+    return this.#world.evaluateHandle(pageFunction, ...args);
   }
 }
