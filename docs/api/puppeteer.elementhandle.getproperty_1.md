@@ -1,13 +1,13 @@
 ---
-sidebar_label: JSHandle.getProperty_1
+sidebar_label: ElementHandle.getProperty_1
 ---
 
-# JSHandle.getProperty() method
+# ElementHandle.getProperty() method
 
 #### Signature:
 
 ```typescript
-class JSHandle {
+class ElementHandle {
   getProperty(propertyName: string): Promise<JSHandle<unknown>>;
 }
 ```

@@ -9,12 +9,10 @@ This class represents a [WebWorker](https://developer.mozilla.org/en-US/docs/Web
 #### Signature:
 
 ```typescript
-export declare class WebWorker extends EventEmitter implements Environment
+export declare class WebWorker extends EventEmitter
 ```
 
 **Extends:** [EventEmitter](./puppeteer.eventemitter.md)
-
-**Implements:** Environment
 
 ## Remarks
 
@@ -40,10 +38,9 @@ for (const worker of page.workers()) {
 
 ## Properties
 
-| Property        | Modifiers             | Type                                    | Description                                      |
-| --------------- | --------------------- | --------------------------------------- | ------------------------------------------------ |
-| client          | <code>readonly</code> | [CDPSession](./puppeteer.cdpsession.md) | The CDP session client the WebWorker belongs to. |
-| timeoutSettings | <code>readonly</code> | TimeoutSettings                         |                                                  |
+| Property | Modifiers             | Type                                    | Description                                      |
+| -------- | --------------------- | --------------------------------------- | ------------------------------------------------ |
+| client   | <code>readonly</code> | [CDPSession](./puppeteer.cdpsession.md) | The CDP session client the WebWorker belongs to. |
 
 ## Methods
 

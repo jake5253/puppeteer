@@ -1,18 +1,16 @@
 ---
-sidebar_label: JSHandle.getProperty
+sidebar_label: ElementHandle.getProperty
 ---
 
-# JSHandle.getProperty() method
-
-Fetches a single property from the referenced object.
+# ElementHandle.getProperty() method
 
 #### Signature:
 
 ```typescript
-class JSHandle {
-  getProperty<K extends keyof T>(
+class ElementHandle {
+  getProperty<K extends keyof ElementType>(
     propertyName: HandleOr<K>
-  ): Promise<HandleFor<Awaited<T[K]>>>;
+  ): Promise<HandleFor<ElementType[K]>>;
 }
 ```
 
@@ -24,4 +22,4 @@ class JSHandle {
 
 **Returns:**
 
-Promise&lt;[HandleFor](./puppeteer.handlefor.md)&lt;Awaited&lt;T\[K\]&gt;&gt;&gt;
+Promise&lt;[HandleFor](./puppeteer.handlefor.md)&lt;ElementType\[K\]&gt;&gt;

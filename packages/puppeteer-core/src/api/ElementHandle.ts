@@ -166,26 +166,20 @@ export abstract class ElementHandle<
     return this.handle.disposed;
   }
 
-  /**
-   * @internal
-   */
   override async getProperty<K extends keyof ElementType>(
     propertyName: HandleOr<K>
   ): Promise<HandleFor<ElementType[K]>>;
-  /**
-   * @internal
-   */
   override async getProperty(propertyName: string): Promise<JSHandle<unknown>>;
   override async getProperty<K extends keyof ElementType>(
-    propertyName: HandleOr<K>
-  ): Promise<HandleFor<ElementType[K]>> {
-    return this.handle.getProperty(propertyName);
+    propertyName: HandleOr<K> | string
+  ): Promise<HandleFor<Awaited<ElementType[K]>> | JSHandle<unknown>> {
+    return this.handle.getProperty(propertyName as HandleOr<K>);
   }
 
   /**
    * @internal
    */
-  override async getProperties(): Promise<Map<string, JSHandle>> {
+  override async getProperties(): Promise<Map<string, JSHandle<unknown>>> {
     return this.handle.getProperties();
   }
 

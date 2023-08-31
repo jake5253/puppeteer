@@ -10,7 +10,7 @@ Gets a map of handles representing the properties of the current handle.
 
 ```typescript
 class JSHandle {
-  abstract getProperties(): Promise<Map<string, JSHandle<unknown>>>;
+  getProperties(): Promise<Map<string, JSHandle<unknown>>>;
 }
 ```
 

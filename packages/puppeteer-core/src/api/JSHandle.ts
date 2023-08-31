@@ -118,15 +118,15 @@ export abstract class JSHandle<T = unknown>
    */
   getProperty<K extends keyof T>(
     propertyName: HandleOr<K>
-  ): Promise<HandleFor<T[K]>>;
+  ): Promise<HandleFor<Awaited<T[K]>>>;
   getProperty(propertyName: string): Promise<JSHandle<unknown>>;
 
   /**
    * @internal
    */
   getProperty<K extends keyof T>(
-    propertyName: HandleOr<K>
-  ): Promise<HandleFor<T[K]>> {
+    propertyName: HandleOr<K> | string
+  ): Promise<HandleFor<Awaited<T[K]>> | JSHandle<unknown>> {
     return this.evaluateHandle((object, propertyName) => {
       return object[propertyName as K];
     }, propertyName);
@@ -150,30 +150,20 @@ export abstract class JSHandle<T = unknown>
    * children; // holds elementHandles to all children of document.body
    * ```
    */
-  async getProperties(): Promise<Map<string, JSHandle>> {
+  async getProperties(): Promise<Map<string, JSHandle<unknown>>> {
     const propertyNames = await this.evaluate(object => {
-      const enumerableProperties = [];
-      const descriptors = Object.getOwnPropertyDescriptors(object);
-      for (const propertyName in descriptors) {
-        if (descriptors[propertyName]?.enumerable) {
-          enumerableProperties.push(propertyName);
-        }
-      }
-      return enumerableProperties;
+      return Object.keys(object as object) as Array<Extract<keyof T, string>>;
     });
-    const map = new Map<string, JSHandle>();
-    const results = await Promise.all(
-      propertyNames.map(key => {
-        return this.getProperty(key);
-      })
+    return new Map(
+      await Promise.all(
+        propertyNames.map(async name => {
+          return [
+            name,
+            await this.getProperty<Extract<keyof T, string>>(name),
+          ] as const;
+        })
+      )
     );
-    for (const [key, value] of Object.entries(propertyNames)) {
-      using handle = results[key as any];
-      if (handle) {
-        map.set(value, handle.move());
-      }
-    }
-    return map;
   }
 
   /**
