@@ -69,7 +69,7 @@ import {HTTPRequest} from './HTTPRequest.js';
 import {HTTPResponse} from './HTTPResponse.js';
 import {Keyboard, Mouse, Touchscreen} from './Input.js';
 import {NetworkManager} from './NetworkManager.js';
-import {getBidiHandle} from './Realm.js';
+import {createBidiHandle} from './Realm.js';
 import {BidiSerializer} from './Serializer.js';
 
 /**
@@ -343,7 +343,7 @@ export class BidiPage extends Page {
     }
     if (isConsoleLogEntry(event)) {
       const args = event.args.map(arg => {
-        return getBidiHandle(frame.context(), arg, frame);
+        return createBidiHandle(frame.mainRealm(), arg);
       });
 
       const text = args

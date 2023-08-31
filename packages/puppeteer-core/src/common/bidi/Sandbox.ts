@@ -23,7 +23,7 @@ import {EvaluateFunc, HandleFor} from '../types.js';
 import {withSourcePuppeteerURLIfNone} from '../util.js';
 
 import {BrowsingContext} from './BrowsingContext.js';
-import {BidiJSHandle} from './JSHandle.js';
+import {BidiFrame} from './Frame.js';
 import {Realm as BidiRealm} from './Realm.js';
 /**
  * A unique key for {@link SandboxChart} to denote the default world.
@@ -54,14 +54,17 @@ export interface SandboxChart {
  */
 export class Sandbox extends Realm {
   #realm: BidiRealm;
+  #frame: BidiFrame;
 
   constructor(
+    frame: BidiFrame,
     // TODO: We should split the Realm and BrowsingContext
     realm: BidiRealm | BrowsingContext,
     timeoutSettings: TimeoutSettings
   ) {
     super(timeoutSettings);
     this.#realm = realm;
+    this.#frame = frame;
 
     // TODO: Tack correct realm similar to BrowsingContexts
     this.#realm.connection.on(
@@ -70,6 +73,10 @@ export class Sandbox extends Realm {
         void this.taskManager.rerunAll();
       }
     );
+  }
+
+  override get environment(): BidiFrame {
+    return this.#frame;
   }
 
   async evaluateHandle<
@@ -107,7 +114,7 @@ export class Sandbox extends Realm {
   }
 
   async transferHandle<T extends JSHandle<Node>>(handle: T): Promise<T> {
-    if ((handle as unknown as BidiJSHandle).context() === this.#realm) {
+    if (handle.realm === this) {
       return handle;
     }
     const transferredHandle = await this.evaluateHandle(node => {
