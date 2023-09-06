@@ -7,7 +7,6 @@ import {scriptInjector} from '../ScriptInjector.js';
 import {EvaluateFunc, HandleFor} from '../types.js';
 import {
   PuppeteerURL,
-  debugError,
   getSourcePuppeteerURLIfAvailable,
   isString,
 } from '../util.js';
@@ -27,43 +26,61 @@ export const getSourceUrlComment = (url: string): string => {
 
 export class Realm extends EventEmitter {
   readonly connection: Connection;
-  readonly #id: string;
 
+  #id!: string;
   #sandbox!: Sandbox;
 
-  constructor(connection: Connection, id: string) {
+  constructor(connection: Connection) {
     super();
     this.connection = connection;
-    this.#id = id;
   }
 
   get target(): Bidi.Script.Target {
     return {
-      context: this.#id,
+      context: this.#sandbox.environment.context().id,
       sandbox: this.#sandbox.name,
     };
   }
 
+  handleRealmDestroyed = async (
+    params: Bidi.Script.RealmDestroyed['params']
+  ): Promise<void> => {
+    if (params.realm === this.#id) {
+      // Note: The Realm is destroyed, so in theory the handle should be as
+      // well.
+      this.internalPuppeteerUtil = undefined;
+      this.connection.off(
+        Bidi.ChromiumBidi.Script.EventNames.RealmDestroyed,
+        this.handleRealmDestroyed
+      );
+    }
+  };
+
+  handleRealmCreated = (params: Bidi.Script.RealmCreated['params']): void => {
+    if (
+      params.type === 'window' &&
+      params.context === this.#sandbox.environment._id &&
+      params.sandbox === this.#sandbox.name
+    ) {
+      this.#id = params.realm;
+      void this.#sandbox.taskManager.rerunAll();
+      this.connection
+        .off(
+          Bidi.ChromiumBidi.Script.EventNames.RealmCreated,
+          this.handleRealmCreated
+        )
+        .on(
+          Bidi.ChromiumBidi.Script.EventNames.RealmDestroyed,
+          this.handleRealmDestroyed
+        );
+    }
+  };
+
   setSandbox(sandbox: Sandbox): void {
     this.#sandbox = sandbox;
-
-    // TODO: Tack correct realm similar to BrowsingContexts
-    this.connection.on(Bidi.ChromiumBidi.Script.EventNames.RealmCreated, () => {
-      void this.#sandbox.taskManager.rerunAll();
-    });
-    // TODO(jrandolf): We should try to find a less brute-force way of doing
-    // this.
     this.connection.on(
-      Bidi.ChromiumBidi.Script.EventNames.RealmDestroyed,
-      async () => {
-        const promise = this.internalPuppeteerUtil;
-        this.internalPuppeteerUtil = undefined;
-        try {
-          await (await promise)?.dispose();
-        } catch (error) {
-          debugError(error);
-        }
-      }
+      Bidi.ChromiumBidi.Script.EventNames.RealmCreated,
+      this.handleRealmCreated
     );
   }
 
