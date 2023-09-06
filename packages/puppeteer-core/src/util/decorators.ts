@@ -72,3 +72,19 @@ export function throwIfDisposed<This extends Disposed>(
     };
   };
 }
+
+export function bound<This>(
+  _: (this: This, ...args: any[]) => any,
+  context: ClassMethodDecoratorContext<
+    This,
+    (this: This, ...args: any[]) => any
+  >
+): void {
+  if (context.private) {
+    throw new TypeError('Not supported on private methods.');
+  }
+  context.addInitializer(function () {
+    // @ts-expect-error - This should always work.
+    this[context.name] = this[context.name].bind(this);
+  });
+}
