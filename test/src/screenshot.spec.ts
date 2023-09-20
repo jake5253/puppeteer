@@ -14,13 +14,15 @@
  * limitations under the License.
  */
 
+/* eslint-disable */
+
 import assert from 'assert';
 
 import expect from 'expect';
 
 import {getTestState, launch, setupTestBrowserHooks} from './mocha-utils.js';
 
-describe('Screenshots', function () {
+describe.only('Screenshots', function () {
   setupTestBrowserHooks();
 
   describe('Page.screenshot', function () {

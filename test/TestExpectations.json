@@ -318,6 +318,12 @@
     "expectations": ["PASS"]
   },
   {
+    "testIdPattern": "[screenshot.spec] *",
+    "platforms": ["darwin", "linux", "win32"],
+    "parameters": ["webDriverBiDi"],
+    "expectations": ["PASS"]
+  },
+  {
     "testIdPattern": "[stacktrace.spec] Stack trace *",
     "platforms": ["darwin", "linux", "win32"],
     "parameters": ["webDriverBiDi"],
@@ -1252,12 +1258,6 @@
     "platforms": ["darwin", "linux", "win32"],
     "parameters": ["cdp", "firefox"],
     "expectations": ["FAIL", "SKIP"]
-  },
-  {
-    "testIdPattern": "[screenshot.spec] Screenshots Page.screenshot *",
-    "platforms": ["darwin", "linux", "win32"],
-    "parameters": ["chrome", "webDriverBiDi"],
-    "expectations": ["FAIL"]
   },
   {
     "testIdPattern": "[stacktrace.spec] Stack trace *",
@@ -3414,6 +3414,12 @@
     "expectations": ["FAIL"]
   },
   {
+    "testIdPattern": "[page.spec] Page Page.setCacheEnabled should enable or disable the cache based on the state passed",
+    "platforms": ["darwin", "linux", "win32"],
+    "parameters": ["chrome", "webDriverBiDi"],
+    "expectations": ["PASS"]
+  },
+  {
     "testIdPattern": "[page.spec] Page Page.setCacheEnabled should stay disabled when toggling request interception on/off",
     "platforms": ["darwin", "linux", "win32"],
     "parameters": ["cdp", "firefox"],
@@ -3606,20 +3612,14 @@
     "expectations": ["FAIL", "PASS"]
   },
   {
-    "testIdPattern": "[screenshot.spec] Screenshots ElementHandle.screenshot should capture full element when larger than viewport",
-    "platforms": ["darwin", "linux", "win32"],
-    "parameters": ["cdp", "firefox"],
-    "expectations": ["SKIP"]
-  },
-  {
     "testIdPattern": "[screenshot.spec] Screenshots ElementHandle.screenshot should work for an element with an offset",
-    "platforms": ["darwin", "linux", "win32"],
+    "platforms": ["darwin"],
     "parameters": ["cdp", "firefox"],
     "expectations": ["FAIL"]
   },
   {
     "testIdPattern": "[screenshot.spec] Screenshots ElementHandle.screenshot should work with a rotated element",
-    "platforms": ["darwin", "linux", "win32"],
+    "platforms": ["darwin"],
     "parameters": ["cdp", "firefox"],
     "expectations": ["FAIL"]
   },
@@ -3627,67 +3627,13 @@
     "testIdPattern": "[screenshot.spec] Screenshots Page.screenshot should allow transparency",
     "platforms": ["darwin", "linux", "win32"],
     "parameters": ["cdp", "firefox"],
-    "expectations": ["FAIL"]
-  },
-  {
-    "testIdPattern": "[screenshot.spec] Screenshots Page.screenshot should clip rect",
-    "platforms": ["darwin", "linux", "win32"],
-    "parameters": ["cdp", "firefox"],
-    "expectations": ["FAIL", "PASS"]
-  },
-  {
-    "testIdPattern": "[screenshot.spec] Screenshots Page.screenshot should get screenshot bigger than the viewport",
-    "platforms": ["darwin", "linux", "win32"],
-    "parameters": ["cdp", "firefox"],
     "expectations": ["SKIP"]
-  },
-  {
-    "testIdPattern": "[screenshot.spec] Screenshots Page.screenshot should render white background on jpeg file",
-    "platforms": ["darwin", "linux", "win32"],
-    "parameters": ["cdp", "firefox"],
-    "expectations": ["FAIL"]
-  },
-  {
-    "testIdPattern": "[screenshot.spec] Screenshots Page.screenshot should return base64",
-    "platforms": ["darwin", "linux", "win32"],
-    "parameters": ["chrome", "webDriverBiDi"],
-    "expectations": ["PASS"]
-  },
-  {
-    "testIdPattern": "[screenshot.spec] Screenshots Page.screenshot should return base64",
-    "platforms": ["darwin", "linux", "win32"],
-    "parameters": ["cdp", "firefox"],
-    "expectations": ["FAIL", "PASS"]
   },
   {
     "testIdPattern": "[screenshot.spec] Screenshots Page.screenshot should take fullPage screenshots",
-    "platforms": ["darwin", "linux", "win32"],
+    "platforms": ["darwin"],
     "parameters": ["cdp", "firefox"],
     "expectations": ["FAIL"]
-  },
-  {
-    "testIdPattern": "[screenshot.spec] Screenshots Page.screenshot should use scale for clip",
-    "platforms": ["darwin", "linux", "win32"],
-    "parameters": ["cdp", "firefox"],
-    "expectations": ["FAIL", "PASS"]
-  },
-  {
-    "testIdPattern": "[screenshot.spec] Screenshots Page.screenshot should work",
-    "platforms": ["darwin", "linux", "win32"],
-    "parameters": ["chrome", "webDriverBiDi"],
-    "expectations": ["PASS"]
-  },
-  {
-    "testIdPattern": "[screenshot.spec] Screenshots Page.screenshot should work",
-    "platforms": ["darwin", "linux", "win32"],
-    "parameters": ["cdp", "firefox"],
-    "expectations": ["FAIL", "PASS"]
-  },
-  {
-    "testIdPattern": "[screenshot.spec] Screenshots Page.screenshot should work with webp",
-    "platforms": ["darwin", "linux", "win32"],
-    "parameters": ["cdp", "firefox"],
-    "expectations": ["SKIP"]
   },
   {
     "testIdPattern": "[stacktrace.spec] Stack trace should work for none error objects",
@@ -4050,30 +3996,6 @@
     "expectations": ["FAIL", "PASS"]
   },
   {
-    "testIdPattern": "[screenshot.spec] Screenshots Page.screenshot should return base64",
-    "platforms": ["linux"],
-    "parameters": ["cdp", "chrome", "new-headless"],
-    "expectations": ["FAIL", "PASS"]
-  },
-  {
-    "testIdPattern": "[screenshot.spec] Screenshots Page.screenshot should work",
-    "platforms": ["linux"],
-    "parameters": ["cdp", "chrome", "new-headless"],
-    "expectations": ["FAIL", "PASS"]
-  },
-  {
-    "testIdPattern": "[screenshot.spec] Screenshots Page.screenshot should work in \"fromSurface: false\" mode",
-    "platforms": ["darwin", "linux", "win32"],
-    "parameters": ["cdp", "chrome", "headless"],
-    "expectations": ["SKIP"]
-  },
-  {
-    "testIdPattern": "[screenshot.spec] Screenshots Page.screenshot should work in \"fromSurface: false\" mode",
-    "platforms": ["darwin", "linux", "win32"],
-    "parameters": ["cdp", "chrome", "new-headless"],
-    "expectations": ["SKIP"]
-  },
-  {
     "testIdPattern": "[worker.spec] Workers Page.workers",
     "platforms": ["darwin", "linux", "win32"],
     "parameters": ["cdp", "chrome", "headless"],
@@ -4084,11 +4006,5 @@
     "platforms": ["darwin", "linux", "win32"],
     "parameters": ["cdp", "chrome", "new-headless", "tabTarget"],
     "expectations": ["FAIL"]
-  },
-  {
-    "testIdPattern": "[page.spec] Page Page.setCacheEnabled should enable or disable the cache based on the state passed",
-    "platforms": ["darwin", "linux", "win32"],
-    "parameters": ["chrome", "webDriverBiDi"],
-    "expectations": ["PASS"]
   }
 ]

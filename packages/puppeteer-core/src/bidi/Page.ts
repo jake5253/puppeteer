@@ -606,15 +606,21 @@ export class BidiPage extends Page {
   override async screenshot(
     options: ScreenshotOptions = {}
   ): Promise<Buffer | string> {
-    const {path = undefined, encoding, ...args} = options;
+    const {path = undefined, encoding, clip, ...args} = options;
     if (Object.keys(args).length >= 1) {
-      throw new Error('BiDi only supports "encoding" and "path" options');
+      throw new Error(
+        'BiDi only supports "encoding", "path", and "clip" options'
+      );
     }
 
     const {result} = await this.#connection.send(
       'browsingContext.captureScreenshot',
       {
         context: this.mainFrame()._id,
+        clip: clip && {
+          type: 'viewport',
+          ...clip,
+        },
       }
     );
 

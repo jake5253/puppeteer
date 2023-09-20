@@ -27,10 +27,15 @@ import {
   type NodeFor,
 } from '../common/types.js';
 import {type KeyInput} from '../common/USKeyboardLayout.js';
-import {isString, withSourcePuppeteerURLIfNone} from '../common/util.js';
+import {
+  debugError,
+  isString,
+  withSourcePuppeteerURLIfNone,
+} from '../common/util.js';
 import {assert} from '../util/assert.js';
 import {AsyncIterableUtil} from '../util/AsyncIterableUtil.js';
 import {throwIfDisposed} from '../util/decorators.js';
+import {DisposableStack} from '../util/disposable.js';
 
 import {
   type KeyboardTypeOptions,
@@ -1319,12 +1324,53 @@ export abstract class ElementHandle<
    * {@link Page.(screenshot:3) } to take a screenshot of the element.
    * If the element is detached from DOM, the method throws an error.
    */
+  @throwIfDisposed()
+  @ElementHandle.bindIsolatedHandle
   async screenshot(
     this: ElementHandle<Element>,
-    options?: ScreenshotOptions
-  ): Promise<string | Buffer>;
-  async screenshot(this: ElementHandle<Element>): Promise<string | Buffer> {
-    throw new Error('Not implemented');
+    options: ScreenshotOptions = {}
+  ): Promise<string | Buffer> {
+    let clip = await this.boundingBox();
+    assert(clip, 'Node is either not visible or not an HTMLElement');
+    assert(clip.width !== 0, 'Node has 0 width.');
+    assert(clip.height !== 0, 'Node has 0 height.');
+
+    const page = this.frame.page();
+
+    using stack = new DisposableStack();
+    {
+      const viewport = page.viewport() ?? clip;
+      if (clip.width > viewport.width || clip.height > viewport.height) {
+        await page.setViewport({
+          ...viewport,
+          width: Math.max(viewport.width, Math.ceil(clip.width)),
+          height: Math.max(viewport.height, Math.ceil(clip.height)),
+        });
+        stack.defer(() => {
+          void page.setViewport(viewport).catch(debugError);
+        });
+      }
+    }
+
+    await this.scrollIntoViewIfNeeded();
+
+    clip = await this.boundingBox();
+    assert(clip, 'Node is not visible');
+    assert(clip.width !== 0, 'Node has 0 width.');
+    assert(clip.height !== 0, 'Node has 0 height.');
+
+    const [pageLeft, pageTop] = await this.evaluate(() => {
+      if (!window.visualViewport) {
+        throw new Error('window.visualViewport is not supported.');
+      }
+      return [
+        window.visualViewport.pageLeft,
+        window.visualViewport.pageTop,
+      ] as const;
+    });
+    clip.x += pageLeft;
+    clip.y += pageTop;
+    return await page.screenshot({...options, clip});
   }
 
   /**
